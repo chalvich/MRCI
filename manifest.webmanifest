@@ -1,0 +1,21 @@
+{
+  "name": "MRCI",
+  "short_name": "MRCI",
+  "description": "Trazabilidad de compras, envíos, ventas y catálogo con fotos",
+  "lang": "es-MX",
+  "start_url": "./#/catalogo",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050d16",
+  "theme_color": "#050d16",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nuevo artículo", "url": "./#/catalogo?nuevo=1", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tablero", "url": "./#/tablero", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

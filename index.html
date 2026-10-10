@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050d16">
-<title>Inventario</title>
+<title>MRCI</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MRCI">
 <style>
 :root{
   --bg:#050d16; --bg2:#0a1826; --card:#0d2338; --card2:#153350;
@@ -34,6 +41,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ---------- shell ---------- */
 header.top{position:sticky;top:0;z-index:20;background:rgba(5,13,22,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .top-row{display:flex;align-items:center;gap:12px;padding:12px 20px;max-width:1400px;margin:0 auto}
+header.top{padding-top:env(safe-area-inset-top)}
+html{-webkit-tap-highlight-color:transparent}
+.otp{letter-spacing:.4em;text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
 .brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:15px;letter-spacing:.02em}
 .brand .dot{width:24px;height:24px;border-radius:50%;border:3px solid var(--accent);position:relative;flex:none}
 .brand .dot::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--accent)}
@@ -171,7 +181,7 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 /* ---------- misc ---------- */
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line-strong);padding:10px 16px;border-radius:10px;z-index:70;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:90vw}
 .toast.bad{border-color:var(--red);color:var(--red)}
-.fab{position:fixed;right:18px;bottom:22px;width:54px;height:54px;border-radius:50%;background:var(--accent-deep);color:#fff;border:0;font-size:28px;box-shadow:0 8px 24px rgba(31,95,206,.5);cursor:pointer;z-index:30;display:none}
+.fab{position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;background:var(--accent-deep);color:#fff;border:0;font-size:28px;box-shadow:0 8px 24px rgba(31,95,206,.5);cursor:pointer;z-index:30;display:none}
 .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login .card{max-width:400px;width:100%;padding:28px;display:flex;flex-direction:column;gap:14px}
 .or{display:flex;align-items:center;gap:10px;color:var(--text-mute);font-size:12px}.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
@@ -187,8 +197,8 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
   nav.tabs{padding:0 12px 8px}
   .user .email{display:none}
   .form{grid-template-columns:1fr}
-  .ov{padding:0} .modal{border-radius:0;min-height:100vh;max-width:none;border:0}
-  .modal-f{position:sticky;bottom:0;background:var(--bg2)}
+  .ov{padding:0} .modal{border-radius:0;min-height:100vh;max-width:none;border:0;padding-top:env(safe-area-inset-top)}
+  .modal-f{position:sticky;bottom:0;background:var(--bg2);padding-bottom:calc(14px + env(safe-area-inset-bottom))}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .item .b{padding:8px 10px 10px}
   .kpi .v{font-size:20px}
@@ -246,6 +256,7 @@ function toast(msg, bad = false) {
 }
 function errMsg(e) {
   const m = e?.message || String(e);
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Sin conexión a internet. Revisa tu señal e inténtalo de nuevo.";
   if (/duplicate key/.test(m)) return "Ya existe un registro con esa clave.";
   if (/violates foreign key/.test(m)) return "Hay un dato relacionado que no existe o que impide borrar (revisa paquete / artículo / canal).";
   if (/row-level security/.test(m)) return "Tu cuenta no tiene permiso para esta acción.";
@@ -701,10 +712,11 @@ function shell(activa) {
   const root = $("#root");
   if (!$("header.top", root)) {
     root.innerHTML = `<header class="top"><div class="top-row"><div class="brand"><span class="dot"></span><span>${esc(CFG.NOMBRE_APP || "Inventario")}</span></div>
-      <div class="user"><span class="email">${esc(S.user?.email || "")}</span><button class="btn sm" id="salir">Salir</button></div></div>
+      <div class="user"><button class="btn sm pri${PWA.prompt ? "" : " hidden"}" id="instalar">Instalar app</button><span class="email">${esc(S.user?.email || "")}</span><button class="btn sm" id="salir">Salir</button></div></div>
       <nav class="tabs">${RUTAS.map(([k, l]) => `<a href="#/${k}" data-r="${k}">${l}</a>`).join("")}</nav></header>
       <main id="main"></main><button class="fab" id="fab" aria-label="Nuevo artículo">+</button>`;
     $("#salir").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+    $("#instalar").onclick = instalarPWA;
     $("#fab").onclick = () => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`);
   }
   $$("nav.tabs a").forEach(a => a.classList.toggle("on", a.dataset.r === activa));
@@ -713,7 +725,9 @@ function shell(activa) {
 }
 
 function render() {
-  const [ruta, arg] = (location.hash.replace(/^#\/?/, "") || "catalogo").split("/");
+  const [hashRuta, qs] = location.hash.replace(/^#\/?/, "").split("?");
+  const [ruta, arg] = (hashRuta || "catalogo").split("/");
+  if (qs && /nuevo=1/.test(qs)) { history.replaceState(null, "", "#/catalogo"); setTimeout(() => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`), 50); }
   const activa = ruta === "a" ? "catalogo" : ruta;
   const main = shell(activa);
   const v = { tablero: vTablero, catalogo: vCatalogo, a: vFicha, paquetes: vPaquetes, cargos: vCargos, ventas: vVentas, historial: vHistorial, ajustes: vAjustes }[ruta] || vCatalogo;
@@ -1178,8 +1192,25 @@ function pantallaLogin(msg = "") {
     e.preventDefault();
     const { error } = await sb.auth.signInWithOtp({ email: $("#mail").value.trim(), options: { emailRedirectTo: url, shouldCreateUser: true } });
     if (error) return toast(errMsg(error), true);
-    $("#mf").innerHTML = `<div class="soft">Listo: revisa tu correo y abre el enlace en este mismo navegador.</div>`;
+    const email = $("#mail").value.trim();
+    $("#mf").innerHTML = `<div class="soft">Te enviamos un correo a <b>${esc(email)}</b>. Escribe aquí el <b>código</b> que trae (recomendado si usas la app instalada), o abre el enlace en este mismo navegador.</div>
+      <input class="in otp" id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••">
+      <button class="btn pri" id="verif" type="button">Entrar con el código</button>`;
+    $("#otp").focus();
+    const verificar = async () => {
+      const token = $("#otp").value.replace(/\D/g, "");
+      if (token.length < 6) return toast("Escribe el código completo", true);
+      const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+      if (error) toast(/expired|invalid/i.test(error.message) ? "Código incorrecto o vencido. Pide uno nuevo." : errMsg(error), true);
+    };
+    $("#verif").onclick = verificar;
+    $("#otp").onkeydown = ev => { if (ev.key === "Enter") { ev.preventDefault(); verificar(); } };
   };
+  if (PWA.esIOS && !PWA.instalada) {
+    const t = document.createElement("p"); t.className = "mute"; t.style.cssText = "font-size:12px;margin:0";
+    t.innerHTML = "📲 Para instalarla en tu iPhone: botón <b>Compartir</b> → <b>Agregar a pantalla de inicio</b>.";
+    $(".login .card").appendChild(t);
+  }
 }
 
 async function entrar(session) {
@@ -1193,12 +1224,33 @@ async function entrar(session) {
     return;
   }
   $("#root").innerHTML = `<div class="loading">Cargando datos…</div>`;
-  try { await cargarTodo(); } catch (e) { $("#root").innerHTML = `<div class="login"><div class="card"><div class="err">${esc(errMsg(e))}</div><p class="soft">¿Ya corriste <b>sql/01_esquema.sql</b> en Supabase?</p></div></div>`; return; }
+  try { await cargarTodo(); } catch (e) { $("#root").innerHTML = `<div class="login"><div class="card"><div class="err">${esc(errMsg(e))}</div>${/conexión/.test(errMsg(e)) ? `<button class="btn" onclick="location.reload()">Reintentar</button>` : `<p class="soft">¿Ya corriste <b>sql/01_esquema.sql</b> en Supabase?</p>`}</div></div>`; return; }
   render();
 }
 
+/* ---------- PWA: instalación y service worker ---------- */
+const PWA = {
+  prompt: null,
+  esIOS: /iphone|ipad|ipod/i.test(navigator.userAgent),
+  instalada: matchMedia("(display-mode: standalone)").matches || navigator.standalone === true,
+};
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); PWA.prompt = e; $("#instalar")?.classList.remove("hidden"); });
+window.addEventListener("appinstalled", () => { PWA.prompt = null; $("#instalar")?.classList.add("hidden"); toast("App instalada ✓"); });
+async function instalarPWA() {
+  if (!PWA.prompt) return;
+  PWA.prompt.prompt();
+  await PWA.prompt.userChoice;
+  PWA.prompt = null; $("#instalar")?.classList.add("hidden");
+}
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW", e)));
+
 (async function init() {
-  if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY || !window.supabase) {
+  if (CFG.SUPABASE_URL && !window.supabase) {
+    $("#root").innerHTML = `<div class="login"><div class="card"><div class="brand"><span class="dot"></span><span>${esc(CFG.NOMBRE_APP || "Inventario")}</span></div>
+      <div class="err">Sin conexión a internet. Conéctate y vuelve a abrir la app.</div><button class="btn" onclick="location.reload()">Reintentar</button></div></div>`;
+    return;
+  }
+  if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) {
     $("#root").innerHTML = `<div class="login"><div class="card"><div class="brand"><span class="dot"></span><span>Falta configurar</span></div>
       <p class="soft">Abre <b>config.js</b> y pega la URL y la anon key de tu proyecto Supabase (Project Settings → API). Los pasos completos están en el README.</p></div></div>`;
     return;
