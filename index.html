@@ -1145,6 +1145,14 @@ function vAjustes(main) {
     <div class="card"><div class="sec-h"><h2>Marcas</h2><button class="btn sm" data-n="marcas">+ Marca</button></div><div id="tm"></div></div>
     <div class="card"><div class="sec-h"><h2>Canales de venta</h2><button class="btn sm" data-n="canales">+ Canal</button></div><div id="tc"></div></div>
     <div class="card"><div class="sec-h"><h2>Estatus (flujo)</h2><button class="btn sm" data-n="estatus">+ Estatus</button></div><div id="te"></div></div>
+    <div class="card"><h2>Mi contraseña</h2>
+      <p class="soft" style="margin-top:0">Ponle contraseña a tu cuenta (<b>${esc(S.user?.email || "")}</b>) para entrar sin esperar correos. Mínimo 8 caracteres.</p>
+      <form id="cpf" style="display:flex;flex-direction:column;gap:8px">
+        <input type="email" value="${esc(S.user?.email || "")}" autocomplete="username" hidden>
+        <input class="in" type="password" id="np1" placeholder="Nueva contraseña" autocomplete="new-password" minlength="8" required>
+        <input class="in" type="password" id="np2" placeholder="Repite la contraseña" autocomplete="new-password" minlength="8" required>
+        <button class="btn pri">Guardar contraseña</button>
+      </form></div>
     <div class="card"><h2>Usuarios con acceso</h2>${S.usuarios.map(u => `<div style="padding:4px 0">${esc(u.nombre || "")} <span class="mute">${esc(u.email)}</span></div>`).join("")}
       <p class="mute" style="font-size:12px">Para agregar a alguien: Supabase → Table Editor → <b>usuarios_permitidos</b> → Insert row.</p></div>
     <div class="card" style="grid-column:1/-1"><h2>Importar fotos en lote</h2>
@@ -1156,6 +1164,15 @@ function vAjustes(main) {
   tabla($("#tc"), { filas: S.canales, clave: "cc", alClick: c => abrirForm("canales", c), cols: [{ k: "nombre", l: "Canal" }, { k: "comision_pct", l: "%", r: 1 }, { k: "comision_fija", l: "Fija", r: 1, f: fmt.money }] });
   tabla($("#te"), { filas: S.estatus, clave: "ce", alClick: e => abrirForm("estatus", e), cols: [{ k: "orden", l: "#", r: 1 }, { k: "nombre", l: "Estatus", h: r => pillEst(r.clave) }, { k: "clave", l: "Clave" }] });
   $$("[data-n]", main).forEach(b => b.onclick = () => abrirForm(b.dataset.n));
+  $("#cpf").onsubmit = async e => {
+    e.preventDefault();
+    const p1 = $("#np1").value, p2 = $("#np2").value;
+    if (p1.length < 8) return toast("Usa al menos 8 caracteres.", true);
+    if (p1 !== p2) return toast("Las contraseñas no coinciden.", true);
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) return toast(/different/i.test(error.message) ? "Esa ya es tu contraseña actual." : /weak|short/i.test(error.message) ? "Contraseña muy débil: usa letras y números." : errMsg(error), true);
+    $("#cpf").reset(); toast("Contraseña guardada ✓ Ya puedes entrar con ella.");
+  };
   $("#lote").onchange = async e => {
     const files = [...e.target.files]; e.target.value = "";
     const log = $("#log"); log.classList.remove("hidden"); log.textContent = "";
@@ -1183,20 +1200,32 @@ function pantallaLogin(msg = "") {
     <div class="brand"><span class="dot"></span><span>${esc(CFG.NOMBRE_APP || "Inventario")}</span></div>
     <p class="soft" style="margin:0">Trazabilidad de compras, envíos, ventas y catálogo con fotos.</p>
     ${msg ? `<div class="err">${msg}</div>` : ""}
-    <button class="btn pri" id="gh">Entrar con GitHub</button>
-    <div class="or">o con tu correo</div>
-    <form id="mf" style="display:flex;flex-direction:column;gap:8px"><input class="in" type="email" id="mail" placeholder="tu@correo.com" required><button class="btn">Enviarme un enlace</button></form>
+    <form id="pf" style="display:flex;flex-direction:column;gap:8px">
+      <input class="in" type="email" id="pmail" placeholder="tu@correo.com" autocomplete="username" required>
+      <input class="in" type="password" id="ppass" placeholder="Contraseña" autocomplete="current-password" required>
+      <button class="btn pri">Entrar</button>
+    </form>
+    <div class="or">¿primera vez u olvidaste tu contraseña?</div>
+    <button class="btn" id="verlink" type="button">Entrar con un enlace a mi correo</button>
+    <form id="mf" class="hidden" style="display:flex;flex-direction:column;gap:8px"><input class="in" type="email" id="mail" placeholder="tu@correo.com" required><button class="btn pri">Enviarme el enlace</button>
+      <span class="mute" style="font-size:12px">Después de entrar, ve a <b>Catálogos → Mi contraseña</b> para ponerle una.</span></form>
   </div></div>`;
-  $("#gh").onclick = () => sb.auth.signInWithOAuth({ provider: "github", options: { redirectTo: url } });
+  $("#pf").onsubmit = async e => {
+    e.preventDefault();
+    const b = $("#pf button"); b.disabled = true; b.textContent = "Entrando…";
+    const { error } = await sb.auth.signInWithPassword({ email: $("#pmail").value.trim(), password: $("#ppass").value });
+    b.disabled = false; b.textContent = "Entrar";
+    if (error) toast(/invalid login|credentials/i.test(error.message) ? "Correo o contraseña incorrectos." : /not confirmed/i.test(error.message) ? "Primero confirma tu correo con el enlace." : errMsg(error), true);
+  };
+  $("#verlink").onclick = () => { $("#mf").classList.remove("hidden"); $("#verlink").classList.add("hidden"); $("#mail").value = $("#pmail").value; $("#mail").focus(); };
   $("#mf").onsubmit = async e => {
     e.preventDefault();
-    const { error } = await sb.auth.signInWithOtp({ email: $("#mail").value.trim(), options: { emailRedirectTo: url, shouldCreateUser: true } });
-    if (error) return toast(errMsg(error), true);
     const email = $("#mail").value.trim();
-    $("#mf").innerHTML = `<div class="soft">Te enviamos un correo a <b>${esc(email)}</b>. Escribe aquí el <b>código</b> que trae (recomendado si usas la app instalada), o abre el enlace en este mismo navegador.</div>
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: url, shouldCreateUser: true } });
+    if (error) return toast(/rate limit|too many/i.test(error.message) ? "Ya se pidieron varios correos. Espera unos minutos e inténtalo de nuevo." : errMsg(error), true);
+    $("#mf").innerHTML = `<div class="soft">Te enviamos un correo a <b>${esc(email)}</b>. Ábrelo <b>en este mismo dispositivo</b> y dale clic al enlace. Si el correo trae un código, escríbelo aquí:</div>
       <input class="in otp" id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="••••••">
-      <button class="btn pri" id="verif" type="button">Entrar con el código</button>`;
-    $("#otp").focus();
+      <button class="btn" id="verif" type="button">Entrar con el código</button>`;
     const verificar = async () => {
       const token = $("#otp").value.replace(/\D/g, "");
       if (token.length < 6) return toast("Escribe el código completo", true);
