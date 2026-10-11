@@ -77,6 +77,8 @@ h1{font-size:22px;margin:0 0 4px;font-weight:650} h2{font-size:16px;margin:0 0 1
 .btn.sm{padding:4px 10px;min-height:28px;font-size:12px;border-radius:8px}
 .btn:disabled{opacity:.5;cursor:default}
 input.in,select.in,textarea.in{width:100%;background:var(--bg2);border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;outline:none;min-height:38px}
+input.in[type=date]{-webkit-appearance:none;appearance:none;min-width:0;display:block}
+input.in[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 input.in:focus,select.in:focus,textarea.in:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
 textarea.in{min-height:76px;resize:vertical}
 select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-soft) 50%),linear-gradient(135deg,var(--text-soft) 50%,transparent 50%);background-position:calc(100% - 16px) 16px,calc(100% - 11px) 16px;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
@@ -164,11 +166,12 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 .status-step{display:flex;gap:4px;flex-wrap:wrap}
 
 /* ---------- modal ---------- */
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
-.modal{background:var(--bg2);border:1px solid var(--line-strong);border-radius:16px;width:100%;max-width:760px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px 16px;overscroll-behavior:contain}
+.modal{background:var(--bg2);border:1px solid var(--line-strong);border-radius:16px;width:100%;max-width:760px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px)}
+.modal-h,.modal-f{flex:none}
 .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
 .modal-h h2{margin:0}
-.modal-b{padding:18px 20px}
+.modal-b{padding:18px 20px;overflow-y:auto;flex:1;min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .modal-f{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
 .modal-f .left{margin-right:auto}
 .fsec{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:650;margin:18px 0 10px;grid-column:1/-1}
@@ -219,6 +222,24 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 .toggle input:checked+.knob{background:var(--green)}
 .toggle input:checked+.knob::after{left:23px}
 .show-m{display:none}
+/* paleta de colores */
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.sw-c{width:30px;height:30px;border-radius:50%;border:2px solid var(--line-strong);cursor:pointer;padding:0;position:relative}
+.sw-c.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.sw-c.on::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;text-shadow:0 0 3px #000}
+.dot-c{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid var(--line-strong);vertical-align:-1px;margin-right:6px}
+.col-sel{font-size:12px;color:var(--text);font-weight:600}
+/* TC del día */
+.tcx{min-height:auto;margin-top:6px;font-size:12.5px;color:var(--text-soft)}
+/* rastreo */
+.trk{position:absolute;right:8px;top:8px;width:32px;height:32px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.btn.trkbtn{background:var(--red-bg);border-color:rgba(255,106,95,.45);color:var(--red)}
+.btn.icon{padding:8px 11px;flex:none!important}
+/* jalar para actualizar */
+.ptr{position:fixed;left:50%;top:calc(var(--hh,100px) - 44px);width:38px;height:38px;margin-left:-19px;border-radius:50%;background:var(--card2);border:1px solid var(--line-strong);display:flex;align-items:center;justify-content:center;z-index:19;opacity:0;pointer-events:none;color:var(--text-soft);font-size:18px;transition:opacity .15s}
+.ptr.listo{color:var(--accent);border-color:var(--accent)}
+.ptr.gira span{animation:gira .8s linear infinite;display:inline-block}
+@keyframes gira{to{transform:rotate(360deg)}}
 .fab{position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;background:var(--accent-deep);color:#fff;border:0;font-size:28px;box-shadow:0 8px 24px rgba(31,95,206,.5);cursor:pointer;z-index:30;display:none}
 .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login .card{max-width:400px;width:100%;padding:28px;display:flex;flex-direction:column;gap:14px}
@@ -229,15 +250,17 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 
 @media (pointer:coarse){input.in,select.in,textarea.in{font-size:16px}}
 @media (max-width:860px){
-  .ficha{grid-template-columns:1fr}
+  .ficha{grid-template-columns:minmax(0,1fr)}
+  .ficha>div{min-width:0}
 }
 @media (max-width:640px){
   .top-row{padding:10px 16px} main{padding:16px 16px 100px}
   nav.tabs{padding:0 12px 8px}
   .user .email{display:none}
   .form{grid-template-columns:1fr}
-  .ov{padding:0} .modal{border-radius:0;min-height:100vh;max-width:none;border:0;padding-top:env(safe-area-inset-top)}
-  .modal-f{position:sticky;bottom:0;background:var(--bg2);padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  .ov{padding:0;align-items:stretch} .modal{border-radius:0;height:100%;max-height:none;max-width:none;border:0}
+  .modal-h{padding-top:calc(14px + env(safe-area-inset-top))}
+  .modal-f{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .item .b{padding:8px 10px 10px}
   .kpi .v{font-size:20px}
@@ -318,6 +341,35 @@ function errMsg(e) {
   if (/violates foreign key/.test(m)) return "Hay un dato relacionado que no existe o que impide borrar (revisa paquete / artículo / canal).";
   if (/row-level security/.test(m)) return "Tu cuenta no tiene permiso para esta acción.";
   return m;
+}
+
+/* ---------- colores, tallas, rastreo, tipo de cambio ---------- */
+const COLORES = [["Negro", "#111111"], ["Blanco", "#f5f5f5"], ["Gris", "#8a8f98"], ["Plata", "#c4c8d0"], ["Dorado", "#c9a227"],
+  ["Beige", "#d9c3a0"], ["Crema", "#f1e6cf"], ["Café", "#6b4226"], ["Camel", "#b5835a"], ["Rojo", "#c62828"], ["Vino", "#6d1a2a"],
+  ["Rosa", "#f48fb1"], ["Morado", "#7e57c2"], ["Azul", "#1e5bd8"], ["Marino", "#1a2a5a"], ["Verde", "#2e7d32"], ["Menta", "#98e0c4"],
+  ["Amarillo", "#f2c94c"], ["Naranja", "#ef7d32"], ["Multicolor", "conic-gradient(#e53935,#fbc02d,#43a047,#1e88e5,#8e24aa,#e53935)"]];
+const colorDe = nombre => COLORES.find(([n]) => norm(n) === norm(nombre));
+const puntoColor = nombre => { const c = colorDe(nombre); return nombre ? `<span class="dot-c" style="background:${c ? c[1] : "transparent"}"></span>${esc(c ? c[0] : nombre)}` : "—"; };
+const CATEGORIAS = ["Tacones", "Zapatos", "Tennis", "Bolsa", "Otros"];
+function tallasPara(cat) {
+  if (["Tacones", "Zapatos", "Tennis"].includes(cat)) { const t = []; for (let n = 30; n <= 37; n += 0.5) t.push(String(n)); return t; }
+  if (cat === "Bolsa") return ["Mini", "Chica", "Mediana", "Grande", "Única"];
+  return ["XS", "S", "M", "L", "XL", "Única"];
+}
+const ICON_PAQ = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>`;
+const ICON_LAPIZ = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
+function guiaDe(a) { return (a.rastreo_correo || S.paquetes.find(p => p.numero === a.paquete_numero)?.rastreo || "").trim(); }
+function urlRastreo(a) { const g = guiaDe(a); return g ? `https://trackings.post.japanpost.jp/services/srv/search/direct?locale=en&reqCodeNo1=${encodeURIComponent(g)}` : null; }
+async function tipoCambioJPY() {
+  if (S.tc && Date.now() - S.tc.t < 30 * 60e3) return S.tc;
+  try {
+    const r = await fetch("https://api.frankfurter.dev/v1/latest?from=JPY&to=MXN").then(r => r.json());
+    S.tc = { rate: r.rates.MXN, fecha: r.date, fuente: "Banco Central Europeo", t: Date.now() };
+  } catch (e) {
+    const r = await fetch("https://open.er-api.com/v6/latest/JPY").then(r => r.json());
+    S.tc = { rate: r.rates.MXN, fecha: (r.time_last_update_utc || "").slice(5, 16), fuente: "ExchangeRate-API", t: Date.now() };
+  }
+  return S.tc;
 }
 
 /* =====================================================================
@@ -428,24 +480,24 @@ const MOD = {
       F("nombre", "Nombre", "text", { req: 1, full: 1 }),
       F("marca_id", "Marca", "select", { src: "marcas", nueva: "marca" }),
       F("estatus", "Estatus", "select", { src: "estatus", req: 1, def: "COMPRADO" }),
-      F("categoria", "Categoría", "list", { opts: listas.categoria }),
-      F("color", "Color", "list", { opts: listas.color }),
-      F("talla", "Talla"),
+      F("categoria", "Categoría", "select", { opts: () => CATEGORIAS.map(c => [c, c]) }),
+      F("talla", "Talla", "select", { opts: b => tallasPara(b?.categoria).map(t => [t, t]), dep: "categoria" }),
+      F("color", "Color", "color", { full: 1 }),
       F("condicion", "Condición", "list", { opts: () => ["Nuevo", "Como nuevo", "Buen estado", "Con detalles"] }),
       F("pagado_por", "Pagado por", "list", { opts: listas.pagador }),
       F("ubicacion", "Ubicación física"),
       F("descripcion", "Descripción", "textarea", { full: 1 }),
       SEC("Compra"),
-      F("plataforma_compra", "Plataforma", "list", { opts: listas.plataforma, def: "Mercari" }),
+      F("plataforma_compra", "Plataforma", "list", { opts: listas.plataforma, oculto: 1 }),
       F("vendedor", "Vendedor (user ref)"),
       F("orden_compra", "Número de orden"),
       F("fecha_compra", "Fecha de compra", "date"),
       F("precio_jpy", "Precio (JPY)", "jpy"),
       F("precio_usd", "Precio (USD)", "usd"),
-      F("pago_mxn", "Pagado (MXN)", "money", { hint: "Lo que cobró tu tarjeta por el artículo" }),
+      F("pago_mxn", "Pagado (MXN)", "money", { hint: "Lo que cobró tu tarjeta por el artículo", tc: 1 }),
       SEC("Envío y costos"),
       F("paquete_numero", "Paquete (K…)", "list", { opts: listas.paquete, hint: "Si no existe, se crea solo" }),
-      F("rastreo_correo", "Rastreo correo"),
+      F("rastreo_correo", "Guía Japan Post", "text", { hint: "Ej. LX333794859JP · activa el botón 📦 de rastreo" }),
       F("costo_envio_mxn", "Envío internacional (MXN)", "money", { hint: "Vacío = se reparte el total del paquete" }),
       F("impuestos_mxn", "Impuestos (MXN)", "money"),
       F("otros_costos_mxn", "Otros costos (MXN)", "money"),
@@ -583,7 +635,7 @@ const MOD = {
 /* =====================================================================
    FORMULARIO GENÉRICO (alta / edición / baja)
    ===================================================================== */
-function inputDe(c, val) {
+function inputDe(c, val, base = {}) {
   const id = `f_${c.k}`;
   const req = c.req ? " required" : "";
   const v = val ?? "";
@@ -594,9 +646,14 @@ function inputDe(c, val) {
     case "date": return `<input class="in" id="${id}" name="${c.k}" type="date" value="${esc(String(v).slice(0, 10))}"${req}>`;
     case "bool": return `<label class="sw"><input type="checkbox" id="${id}" name="${c.k}"${v ? " checked" : ""}> <span>${esc(c.l)}</span></label>`;
     case "select": {
-      const sel = `<select class="in" id="${id}" name="${c.k}"${req}>${opcionesSelect(c, v)}</select>`;
+      const sel = `<select class="in" id="${id}" name="${c.k}"${req}>${opcionesSelect(c, v, base)}</select>`;
       if (!c.nueva) return sel;
       return sel + `<div class="nueva hidden" data-nueva="${c.k}"><input class="in" placeholder="Nombre de la nueva ${esc(c.nueva)}" autocomplete="off"><button type="button" class="btn pri">Agregar</button></div>`;
+    }
+    case "color": {
+      const actual = colorDe(v);
+      return `<input type="hidden" id="${id}" name="${c.k}" value="${esc(actual ? actual[0] : v)}">
+        <div class="swatches" data-colores="${c.k}">${COLORES.map(([n, h]) => `<button type="button" class="sw-c${actual && actual[0] === n ? " on" : ""}" data-c="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="background:${h}"></button>`).join("")}</div>`;
     }
     case "list": {
       const ops = c.opts ? c.opts() : [];
@@ -612,8 +669,9 @@ function inputDe(c, val) {
   }
 }
 
-function opcionesSelect(c, v) {
-  const ops = c.src ? fuentes[c.src]() : c.opts();
+function opcionesSelect(c, v, base = {}) {
+  const ops = c.src ? fuentes[c.src]() : c.opts(base);
+  if (v != null && v !== "" && !ops.some(([k]) => String(k) === String(v))) ops.push([v, v]);
   return `<option value="">—</option>${ops.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(v ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("")}${c.nueva ? `<option value="__nueva">＋ Nueva ${esc(c.nueva)}…</option>` : ""}`;
 }
 
@@ -639,7 +697,19 @@ function valoresCrudos(form, campos) {
   return v;
 }
 
-function cerrarModal() { $(".ov")?.remove(); document.body.style.overflow = ""; }
+function bloquearFondo() {
+  if (document.body.dataset.lock !== undefined) return;
+  document.body.dataset.lock = scrollY;
+  Object.assign(document.body.style, { position: "fixed", top: -scrollY + "px", left: "0", right: "0" });
+}
+function liberarFondo() {
+  const y = document.body.dataset.lock;
+  if (y === undefined) return;
+  delete document.body.dataset.lock;
+  Object.assign(document.body.style, { position: "", top: "", left: "", right: "" });
+  scrollTo(0, +y);
+}
+function cerrarModal() { $(".ov")?.remove(); liberarFondo(); }
 
 function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
   const M = MOD[modKey];
@@ -649,7 +719,7 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
 
   const fld = c => c.t === "bool"
     ? `<div class="fld${c.full ? " full" : ""}">${inputDe(c, base[c.k])}</div>`
-    : `<div class="fld${c.full ? " full" : ""}"><label for="f_${c.k}">${esc(c.l)}${c.req ? ' <span class="req">*</span>' : ""}</label>${inputDe(c, base[c.k])}${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ""}</div>`;
+    : `<div class="fld${c.full ? " full" : ""}"><label for="f_${c.k}">${esc(c.l)}${c.req ? ' <span class="req">*</span>' : ""}${c.t === "color" ? ` <span class="col-sel" data-colsel="${c.k}">${base[c.k] ? puntoColor(base[c.k]) : ""}</span>` : ""}</label>${inputDe(c, base[c.k], base)}${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ""}${c.tc ? `<label class="sw tcx"><input type="checkbox" data-tc> <span>Calcular con el tipo de cambio de hoy (¥ → MXN)</span></label><span class="hint" data-tcinfo></span>` : ""}</div>`;
   const grupos = [];
   M.campos.filter(c => !c.oculto).forEach(c => {
     if (c.sec) grupos.push({ sec: c.sec, items: [] });
@@ -669,7 +739,7 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
       <button type="button" class="btn" data-x>Cancelar</button><button class="btn pri" type="submit">Guardar</button></div>
   </form>`;
   document.body.appendChild(ov);
-  document.body.style.overflow = "hidden";
+  bloquearFondo();
   const form = $("form", ov);
   const calc = $(".calc", ov);
   const tocado = new Set();
@@ -686,6 +756,46 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
   $$("[data-x]", ov).forEach(b => b.onclick = cerrarModal);
   ov.addEventListener("mousedown", e => { if (e.target === ov) cerrarModal(); });
   if (matchMedia("(pointer:fine)").matches) setTimeout(() => form.querySelector("input:not([type=checkbox]),select,textarea")?.focus(), 30);
+
+  // Talla depende de la categoría
+  M.campos.filter(c => c.dep && form.elements[c.k]).forEach(c => {
+    form.elements[c.dep]?.addEventListener("change", () => {
+      const sel = form.elements[c.k], prev = sel.value;
+      sel.innerHTML = opcionesSelect(c, "", { [c.dep]: form.elements[c.dep].value });
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    });
+  });
+  // Paleta de colores
+  $$("[data-colores]", ov).forEach(pal => {
+    const k = pal.dataset.colores, inp = form.elements[k], lbl = $(`[data-colsel="${k}"]`, ov);
+    pal.onclick = e => {
+      const b = e.target.closest(".sw-c"); if (!b) return;
+      const nuevo = inp.value === b.dataset.c ? "" : b.dataset.c;
+      inp.value = nuevo;
+      $$(".sw-c", pal).forEach(x => x.classList.toggle("on", x.dataset.c === nuevo));
+      lbl.innerHTML = nuevo ? puntoColor(nuevo) : "";
+    };
+  });
+  // Tipo de cambio del día ¥ → MXN
+  const chkTC = $("[data-tc]", ov);
+  if (chkTC) {
+    const info = $("[data-tcinfo]", ov), jpy = form.elements.precio_jpy, mxn = form.elements.pago_mxn;
+    const calcular = async () => {
+      if (!chkTC.checked) { info.textContent = ""; return; }
+      const y = Number(jpy?.value);
+      if (!y) { chkTC.checked = false; info.textContent = ""; return toast("Primero escribe el precio en yenes (JPY)", true); }
+      info.textContent = "Consultando tipo de cambio…";
+      try {
+        const tc = await tipoCambioJPY();
+        mxn.value = Math.round(y * tc.rate * 100) / 100;
+        info.textContent = `TC ${tc.rate} MXN por ¥ (${tc.fuente}, ${tc.fecha}). Tu banco puede cobrar un poco más.`;
+        refrescar("pago_mxn");
+      } catch (e) { chkTC.checked = false; info.textContent = ""; toast("No pude consultar el tipo de cambio. Revisa tu conexión.", true); }
+    };
+    chkTC.onchange = calcular;
+    jpy?.addEventListener("input", () => { if (chkTC.checked) calcular(); });
+    mxn.addEventListener("input", e => { if (e.isTrusted) { chkTC.checked = false; info.textContent = ""; } });
+  }
 
   // "＋ Nueva marca…" dentro del select
   $$("[data-nueva]", ov).forEach(box => {
@@ -819,6 +929,34 @@ const esAdmin = () => ADMINS.includes((S.user?.email || "").toLowerCase());
 const puedeVer = k => { const r = RUTAS.find(x => x.k === k); return !r ? ["a", "usuario"].includes(k) : r.activo && (!r.admin || esAdmin()); };
 const nombreUsuario = () => S.usuarios.find(u => u.email.toLowerCase() === (S.user?.email || "").toLowerCase())?.nombre || (S.user?.email || "").split("@")[0];
 
+/* Jalar hacia abajo para actualizar (en la app instalada) */
+function activarJalarParaActualizar() {
+  if (!PWA.instalada && !/[?&]ptr=1/.test(location.search)) return;
+  const ind = $("#ptr"), UMBRAL = 64;
+  let y0 = null, d = 0, ocupado = false;
+  const reset = () => { ind.style.transition = "transform .2s, opacity .2s"; ind.style.transform = "translateY(0)"; ind.style.opacity = 0; ind.classList.remove("listo", "gira"); $("span", ind).textContent = "↓"; };
+  addEventListener("touchstart", e => {
+    y0 = (scrollY <= 0 && !ocupado && !$(".ov") && !$(".lb") && document.body.dataset.lock === undefined) ? e.touches[0].clientY : null; d = 0;
+  }, { passive: true });
+  addEventListener("touchmove", e => {
+    if (y0 === null) return;
+    d = Math.min(Math.max(0, (e.touches[0].clientY - y0) * 0.5), 90);
+    ind.style.transition = "none";
+    ind.style.transform = `translateY(${d}px)`;
+    ind.style.opacity = Math.min(d / UMBRAL, 1);
+    ind.classList.toggle("listo", d >= UMBRAL);
+    $("span", ind).textContent = d >= UMBRAL ? "↻" : "↓";
+  }, { passive: true });
+  addEventListener("touchend", async () => {
+    if (y0 === null) return;
+    y0 = null;
+    if (d < UMBRAL) return reset();
+    ocupado = true; ind.classList.add("gira"); ind.style.transform = `translateY(${UMBRAL}px)`;
+    try { await cargarTodo(); render(); toast("Actualizado ✓"); } catch (e) { toast(errMsg(e), true); }
+    ocupado = false; reset();
+  });
+}
+
 function cerrarMenu() { $(".menu-pop")?.remove(); $(".avatar")?.classList.remove("on"); }
 function abrirMenu() {
   if ($(".menu-pop")) return cerrarMenu();
@@ -845,10 +983,11 @@ function shell(activa) {
     root.innerHTML = `<header class="top"><div class="top-row"><div class="brand"><span class="dot"></span><span>${esc(CFG.NOMBRE_APP || "Inventario")}</span></div>
       <div class="user"><button class="avatar" id="avatar" aria-label="Menú de usuario" title="${esc(S.user?.email || "")}">${esc(nombreUsuario().charAt(0).toUpperCase())}</button></div></div>
       <nav class="tabs">${RUTAS.filter(r => puedeVer(r.k)).map(r => `<a href="#/${r.k}" data-r="${r.k}">${r.l}</a>`).join("")}</nav></header>
-      <main id="main"></main><button class="fab" id="fab" aria-label="Nuevo artículo">+</button>`;
+      <main id="main"></main><button class="fab" id="fab" aria-label="Nuevo artículo">+</button><div class="ptr" id="ptr"><span>↓</span></div>`;
     $("#avatar").onclick = abrirMenu;
     const setHH = () => document.documentElement.style.setProperty("--hh", $("header.top").offsetHeight + "px");
     setHH(); addEventListener("resize", setHH);
+    activarJalarParaActualizar();
     $("#fab").onclick = () => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`);
   }
   $$("nav.tabs a").forEach(a => a.classList.toggle("on", a.dataset.r === activa));
@@ -967,11 +1106,11 @@ async function vCatalogo(main) {
       tabla(lista, { filas: fs, cols, clave: "inv", totales: ["costo_total"], alClick: a => location.hash = `#/a/${a.id}` });
     } else {
       lista.innerHTML = fs.length ? `<div class="grid cards">${fs.map(a => `<div class="item" data-id="${esc(a.id)}">
-        <div class="ph">${a.portada ? `<img data-src="${esc(a.portada)}" alt="" loading="lazy">` : "Sin foto"}${pillEst(a.estatus)}${a.num_fotos > 1 ? `<span class="n">${a.num_fotos} fotos</span>` : ""}</div>
+        <div class="ph">${a.portada ? `<img data-src="${esc(a.portada)}" alt="" loading="lazy">` : "Sin foto"}${pillEst(a.estatus)}${a.num_fotos > 1 ? `<span class="n">${a.num_fotos} fotos</span>` : ""}${a.estatus === "TRANSITO" && urlRastreo(a) ? `<a class="trk" href="${esc(urlRastreo(a))}" target="_blank" rel="noopener" title="Rastrear ${esc(guiaDe(a))}" aria-label="Rastrear envío">${ICON_PAQ}</a>` : ""}</div>
         <div class="b"><div class="m">${esc(a.marca || "—")}</div><div class="t">${esc(a.nombre)}</div>
           <div class="p"><span class="mute">Costo <span class="num">${fmt.money0(a.costo_total)}</span></span>${a.precio_venta != null ? `<span class="num ${signo(a.utilidad)}">${fmt.money0(a.utilidad)}</span>` : a.precio_objetivo ? `<span class="num soft">${fmt.money0(a.precio_objetivo)}</span>` : ""}</div></div></div>`).join("")}</div>`
         : `<div class="card empty">No hay artículos con estos filtros</div>`;
-      $$(".item", lista).forEach(el => el.onclick = () => location.hash = `#/a/${el.dataset.id}`);
+      $$(".item", lista).forEach(el => el.onclick = e => { if (!e.target.closest(".trk")) location.hash = `#/a/${el.dataset.id}`; });
       cargarImgs();
     }
   };
@@ -1000,11 +1139,11 @@ async function vFicha(main, id) {
   <div class="sec-h" style="align-items:flex-start;gap:12px;flex-wrap:wrap"><div style="min-width:0">
     <div class="soft" style="font-size:12px;letter-spacing:.05em;text-transform:uppercase">${esc(a.marca || "Sin marca")} · <span class="num">${esc(a.id)}</span></div>
     <h1 style="margin-top:4px">${esc(a.nombre)}</h1>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">${pillEst(a.estatus)}<span class="mute">${a.dias_en_inventario != null ? `${a.dias_en_inventario} días ${a.venta_id ? "hasta venderse" : "en inventario"}` : ""}</span></div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">${pillEst(a.estatus)}${a.estatus === "TRANSITO" ? (urlRastreo(a) ? `<a class="btn sm trkbtn" href="${esc(urlRastreo(a))}" target="_blank" rel="noopener">${ICON_PAQ} Rastrear ${esc(guiaDe(a))}</a>` : `<span class="tag">Sin guía: agrégala con ✏️</span>`) : ""}<span class="mute">${a.dias_en_inventario != null ? `${a.dias_en_inventario} días ${a.venta_id ? "hasta venderse" : "en inventario"}` : ""}</span></div></div>
     <div class="acciones">
       <div class="fila">${!venta ? `<button class="btn pri" id="vender">Registrar venta</button>` : ""}<button class="btn" id="cotizar">💲 Cotización</button></div>
       <div class="fila"><select class="in" id="est" style="width:auto" title="Cambiar estatus">${ests.map(e => `<option value="${esc(e.clave)}"${e.clave === a.estatus ? " selected" : ""}>${esc(e.nombre)}</option>`).join("")}</select>
-        <button class="btn" id="edit">Editar</button></div>
+        <button class="btn icon" id="edit" title="Editar" aria-label="Editar">${ICON_LAPIZ}</button></div>
     </div>
   </div>
   <div id="pCot" class="hidden" style="margin-top:16px"></div>
@@ -1044,11 +1183,13 @@ async function vFicha(main, id) {
          <button class="btn sm" data-cot style="margin-top:10px">💲 Simular precio de venta</button>`}</div>
 
       <div class="card sec"><h2>Compra</h2><dl class="kv">
-        <dt>Plataforma</dt><dd>${esc(a.plataforma_compra || "—")}</dd><dt>Vendedor</dt><dd>${esc(a.vendedor || "—")}</dd>
+        <dt>Vendedor</dt><dd>${esc(a.vendedor || "—")}</dd>
         <dt>Orden</dt><dd>${esc(a.orden_compra || "—")}</dd><dt>Fecha</dt><dd>${fmt.date(a.fecha_compra)}</dd>
         <dt>Pagado por</dt><dd>${esc(a.pagado_por || "—")}</dd>
         ${a.precio_usd ? `<dt>Precio USD</dt><dd>${fmt.usd(a.precio_usd)}</dd>` : ""}
-        ${a.color || a.talla ? `<dt>Color / talla</dt><dd>${esc([a.color, a.talla].filter(Boolean).join(" · "))}</dd>` : ""}
+        ${a.categoria ? `<dt>Categoría</dt><dd>${esc(a.categoria)}</dd>` : ""}
+        ${a.color ? `<dt>Color</dt><dd>${puntoColor(a.color)}</dd>` : ""}
+        ${a.talla ? `<dt>Talla</dt><dd>${esc(a.talla)}</dd>` : ""}
         ${a.ubicacion ? `<dt>Ubicación</dt><dd>${esc(a.ubicacion)}</dd>` : ""}
       </dl>${a.descripcion ? `<p class="soft" style="margin:10px 0 0">${esc(a.descripcion)}</p>` : ""}${a.notas ? `<p class="mute" style="margin:8px 0 0;font-size:12.5px">${esc(a.notas)}</p>` : ""}</div>
 
