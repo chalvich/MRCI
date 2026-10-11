@@ -191,6 +191,34 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 /* ---------- misc ---------- */
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line-strong);padding:10px 16px;border-radius:10px;z-index:70;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:90vw}
 .toast.bad{border-color:var(--red);color:var(--red)}
+/* grupos del formulario (colapsables) */
+.fgrp{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card)}
+.fgrp>summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:650;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.fgrp>summary::-webkit-details-marker{display:none}
+.fgrp>summary::after{content:"+";font-size:18px;line-height:1;color:var(--text-soft)}
+.fgrp[open]>summary::after{content:"−"}
+.fgrp>.form{padding:2px 14px 14px}
+.modal-b>.form+.calc,.modal-b>.fgrp+.calc{margin-top:4px}
+.nueva{display:flex;gap:8px;margin-top:6px}
+.nueva .in{text-transform:uppercase}
+/* acciones de la ficha */
+.acciones{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.acciones .fila{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+/* cotización */
+.cot-big{font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.meter{position:relative;height:10px;border-radius:6px;background:var(--bg2);margin:10px 0 4px;overflow:visible}
+.meter i{display:block;height:100%;border-radius:6px;transition:width .2s}
+.meter b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);left:50%}
+.meter-l{display:flex;justify-content:space-between;font-size:11px;color:var(--text-mute)}
+.cot-msg{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px}
+.cot-msg.ok{background:var(--green-bg);color:var(--green)} .cot-msg.mid{background:var(--amber-bg);color:var(--amber)} .cot-msg.bad{background:var(--red-bg);color:var(--red)}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;cursor:pointer;background:var(--bg2)}
+.toggle input{display:none}
+.toggle .knob{width:46px;height:26px;border-radius:999px;background:var(--line-strong);position:relative;flex:none;transition:background .15s}
+.toggle .knob::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.toggle input:checked+.knob{background:var(--green)}
+.toggle input:checked+.knob::after{left:23px}
+.show-m{display:none}
 .fab{position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;background:var(--accent-deep);color:#fff;border:0;font-size:28px;box-shadow:0 8px 24px rgba(31,95,206,.5);cursor:pointer;z-index:30;display:none}
 .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login .card{max-width:400px;width:100%;padding:28px;display:flex;flex-direction:column;gap:14px}
@@ -199,6 +227,7 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
 .log{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--bg2);border-radius:10px;padding:10px;max-height:220px;overflow:auto;white-space:pre-wrap}
 .row-actions{display:flex;gap:6px;justify-content:flex-end}
 
+@media (pointer:coarse){input.in,select.in,textarea.in{font-size:16px}}
 @media (max-width:860px){
   .ficha{grid-template-columns:1fr}
 }
@@ -213,7 +242,25 @@ table.t tfoot td{font-weight:650;border-top:1px solid var(--line-strong)}
   .item .b{padding:8px 10px 10px}
   .kpi .v{font-size:20px}
   .bar-row{grid-template-columns:110px 1fr 56px}
-  .fab{display:block}
+  .fab{display:none}
+  body.fijos .fab{display:block}
+  .show-m{display:inline}
+  input.in,select.in,textarea.in{font-size:16px}
+  /* buscador fijo al hacer scroll */
+  .filtros{position:sticky;top:var(--hh,100px);z-index:15;background:var(--bg);margin:0 -16px;padding:4px 16px 0}
+  .filtros .toolbar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .filtros #q{grid-column:1/-1}
+  .filtros .toolbar select.in{width:100%;min-width:0}
+  .filtros .seg{display:flex}.filtros .seg button{flex:1}
+  body.fijos .filtros{border-bottom:1px solid var(--line);box-shadow:0 8px 16px rgba(0,0,0,.35);padding-top:8px}
+  body.fijos .filtros #q{grid-column:auto}
+  body.fijos .filtros #fp,body.fijos .filtros #fo,body.fijos .filtros .seg{display:none}
+  body.fijos .filtros .toolbar{margin-bottom:8px}
+  body.fijos .filtros .chips{margin-bottom:8px}
+  .acciones{width:100%;align-items:stretch}
+  .acciones .fila{justify-content:stretch}
+  .acciones .fila>*{flex:1}
+  .cot-big{font-size:34px}
   .chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scrollbar-width:none}
   .chips::-webkit-scrollbar{display:none}
   .chip{flex:none}
@@ -379,7 +426,7 @@ const MOD = {
     campos: [
       SEC("General"),
       F("nombre", "Nombre", "text", { req: 1, full: 1 }),
-      F("marca_id", "Marca", "select", { src: "marcas", hint: "¿No está? Agrégala en Catálogos" }),
+      F("marca_id", "Marca", "select", { src: "marcas", nueva: "marca" }),
       F("estatus", "Estatus", "select", { src: "estatus", req: 1, def: "COMPRADO" }),
       F("categoria", "Categoría", "list", { opts: listas.categoria }),
       F("color", "Color", "list", { opts: listas.color }),
@@ -402,9 +449,10 @@ const MOD = {
       F("costo_envio_mxn", "Envío internacional (MXN)", "money", { hint: "Vacío = se reparte el total del paquete" }),
       F("impuestos_mxn", "Impuestos (MXN)", "money"),
       F("otros_costos_mxn", "Otros costos (MXN)", "money"),
-      SEC("Venta esperada"),
-      F("precio_objetivo", "Precio objetivo (MXN)", "money"),
-      F("canal_objetivo", "Canal donde lo venderás", "select", { src: "canales" }),
+      SEC("Notas"),
+      // Venta esperada: desactivada (oculto: 1). Para reactivarla quita "oculto: 1".
+      F("precio_objetivo", "Precio objetivo (MXN)", "money", { oculto: 1 }),
+      F("canal_objetivo", "Canal donde lo venderás", "select", { src: "canales", oculto: 1 }),
       F("notas", "Notas", "textarea", { full: 1 }),
     ],
     calc(v) {
@@ -546,8 +594,9 @@ function inputDe(c, val) {
     case "date": return `<input class="in" id="${id}" name="${c.k}" type="date" value="${esc(String(v).slice(0, 10))}"${req}>`;
     case "bool": return `<label class="sw"><input type="checkbox" id="${id}" name="${c.k}"${v ? " checked" : ""}> <span>${esc(c.l)}</span></label>`;
     case "select": {
-      const ops = c.src ? fuentes[c.src]() : c.opts();
-      return `<select class="in" id="${id}" name="${c.k}"${req}><option value="">—</option>${ops.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+      const sel = `<select class="in" id="${id}" name="${c.k}"${req}>${opcionesSelect(c, v)}</select>`;
+      if (!c.nueva) return sel;
+      return sel + `<div class="nueva hidden" data-nueva="${c.k}"><input class="in" placeholder="Nombre de la nueva ${esc(c.nueva)}" autocomplete="off"><button type="button" class="btn pri">Agregar</button></div>`;
     }
     case "list": {
       const ops = c.opts ? c.opts() : [];
@@ -563,6 +612,11 @@ function inputDe(c, val) {
   }
 }
 
+function opcionesSelect(c, v) {
+  const ops = c.src ? fuentes[c.src]() : c.opts();
+  return `<option value="">—</option>${ops.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(v ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("")}${c.nueva ? `<option value="__nueva">＋ Nueva ${esc(c.nueva)}…</option>` : ""}`;
+}
+
 function leerForm(form, campos) {
   const v = {};
   for (const c of campos) {
@@ -571,7 +625,7 @@ function leerForm(form, campos) {
     if (!el) continue;
     if (c.t === "bool") { v[c.k] = el.checked; continue; }
     let x = el.value.trim();
-    if (x === "") { v[c.k] = c.cero ? 0 : null; continue; }
+    if (x === "" || x === "__nueva") { v[c.k] = c.cero ? 0 : null; continue; }
     if (["money", "jpy", "usd", "number"].includes(c.t)) x = Number(x);
     if (c.t === "articulo") x = x.split(" ")[0];
     if (c.t === "select" && c.src === "marcas") x = Number(x);
@@ -593,18 +647,24 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
   const base = { ...defaults, ...(registro || {}) };
   M.campos.forEach(c => { if (c.k && nuevo && base[c.k] === undefined && c.def !== undefined) base[c.k] = typeof c.def === "function" ? c.def() : c.def; });
 
-  const cuerpo = M.campos.map(c => {
-    if (c.sec) return `<div class="fsec">${esc(c.sec)}</div>`;
-    if (c.t === "bool") return `<div class="fld${c.full ? " full" : ""}">${inputDe(c, base[c.k])}</div>`;
-    return `<div class="fld${c.full ? " full" : ""}"><label for="f_${c.k}">${esc(c.l)}${c.req ? ' <span class="req">*</span>' : ""}</label>${inputDe(c, base[c.k])}${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ""}</div>`;
-  }).join("");
+  const fld = c => c.t === "bool"
+    ? `<div class="fld${c.full ? " full" : ""}">${inputDe(c, base[c.k])}</div>`
+    : `<div class="fld${c.full ? " full" : ""}"><label for="f_${c.k}">${esc(c.l)}${c.req ? ' <span class="req">*</span>' : ""}</label>${inputDe(c, base[c.k])}${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ""}</div>`;
+  const grupos = [];
+  M.campos.filter(c => !c.oculto).forEach(c => {
+    if (c.sec) grupos.push({ sec: c.sec, items: [] });
+    else { if (!grupos.length) grupos.push({ sec: null, items: [] }); grupos[grupos.length - 1].items.push(c); }
+  });
+  const cuerpo = grupos.filter(g => g.items.length).map((g, i) => g.sec
+    ? `<details class="fgrp"${i === 0 ? " open" : ""}><summary>${esc(g.sec)}</summary><div class="form">${g.items.map(fld).join("")}</div></details>`
+    : `<div class="form">${g.items.map(fld).join("")}</div>`).join("");
 
   const ov = document.createElement("div");
   ov.className = "ov";
   ov.innerHTML = `<form class="modal" novalidate>
     <div class="modal-h"><h2>${nuevo ? "Nuevo" : "Editar"} ${esc(M.titulo)}${!nuevo && M.pk === "id" && modKey === "articulos" ? ` <span class="mute num" style="font-size:12px;font-weight:400">${esc(registro.id)}</span>` : ""}</h2>
       <button type="button" class="btn ghost" data-x aria-label="Cerrar">✕</button></div>
-    <div class="modal-b"><div class="err hidden"></div><div class="form">${cuerpo}<div class="calc"></div></div></div>
+    <div class="modal-b"><div class="err hidden"></div>${cuerpo}<div class="calc"></div></div>
     <div class="modal-f">${!nuevo ? `<button type="button" class="btn danger left" data-del>Eliminar</button>` : ""}
       <button type="button" class="btn" data-x>Cancelar</button><button class="btn pri" type="submit">Guardar</button></div>
   </form>`;
@@ -625,15 +685,45 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
   refrescar(nuevo ? "canal" : null);
   $$("[data-x]", ov).forEach(b => b.onclick = cerrarModal);
   ov.addEventListener("mousedown", e => { if (e.target === ov) cerrarModal(); });
-  setTimeout(() => form.querySelector("input:not([type=checkbox]),select,textarea")?.focus(), 30);
+  if (matchMedia("(pointer:fine)").matches) setTimeout(() => form.querySelector("input:not([type=checkbox]),select,textarea")?.focus(), 30);
+
+  // "＋ Nueva marca…" dentro del select
+  $$("[data-nueva]", ov).forEach(box => {
+    const c = M.campos.find(x => x.k === box.dataset.nueva);
+    const sel = form.elements[c.k], inp = $("input", box);
+    let previo = sel.value === "__nueva" ? "" : sel.value;
+    sel.addEventListener("change", () => {
+      if (sel.value === "__nueva") { box.classList.remove("hidden"); inp.focus(); }
+      else { previo = sel.value; box.classList.add("hidden"); }
+    });
+    const agregar = async () => {
+      const nombre = inp.value.trim().replace(/\s+/g, " ").toUpperCase();
+      if (!nombre) return toast(`Escribe el nombre de la ${c.nueva}`, true);
+      let m = S.marcas.find(x => x.nombre.toUpperCase() === nombre);
+      if (!m) {
+        const { data, error } = await sb.from("marcas").insert({ nombre }).select().single();
+        if (error) return toast(errMsg(error), true);
+        m = data; S.marcas.push(m); S.marcas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
+        toast(`Marca ${nombre} agregada ✓`);
+      }
+      sel.innerHTML = opcionesSelect(c, m.id);
+      inp.value = ""; box.classList.add("hidden"); previo = String(m.id);
+      refrescar(c.k);
+    };
+    $("button", box).onclick = agregar;
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } });
+  });
 
   const err = $(".err", ov);
   const mostrarErr = m => { err.textContent = m; err.classList.remove("hidden"); $(".modal-b", ov).scrollTop = 0; ov.scrollTop = 0; };
 
   form.onsubmit = async e => {
     e.preventDefault();
-    const falt = M.campos.filter(c => c.req && c.t !== "bool" && !form.elements[c.k].value.trim()).map(c => c.l);
-    if (falt.length) return mostrarErr("Falta: " + falt.join(", "));
+    const falt = M.campos.filter(c => c.req && c.t !== "bool" && form.elements[c.k] && !form.elements[c.k].value.trim()).map(c => c.l);
+    if (falt.length) {
+      M.campos.filter(c => c.req && c.t !== "bool" && form.elements[c.k] && !form.elements[c.k].value.trim()).forEach(c => form.elements[c.k].closest("details")?.setAttribute("open", ""));
+      return mostrarErr("Falta: " + falt.join(", "));
+    }
     const v = leerForm(form, M.campos);
     if (v.articulo_id && !artDe(v.articulo_id)) return mostrarErr("Ese artículo no existe. Elige uno de la lista.");
     const btn = $("button[type=submit]", form); btn.disabled = true; btn.textContent = "Guardando…";
@@ -757,6 +847,8 @@ function shell(activa) {
       <nav class="tabs">${RUTAS.filter(r => puedeVer(r.k)).map(r => `<a href="#/${r.k}" data-r="${r.k}">${r.l}</a>`).join("")}</nav></header>
       <main id="main"></main><button class="fab" id="fab" aria-label="Nuevo artículo">+</button>`;
     $("#avatar").onclick = abrirMenu;
+    const setHH = () => document.documentElement.style.setProperty("--hh", $("header.top").offsetHeight + "px");
+    setHH(); addEventListener("resize", setHH);
     $("#fab").onclick = () => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`);
   }
   $$("nav.tabs a").forEach(a => a.classList.toggle("on", a.dataset.r === activa));
@@ -766,6 +858,7 @@ function shell(activa) {
 }
 
 function render() {
+  S.obs?.disconnect(); S.obs = null; document.body.classList.remove("fijos");
   const [hashRuta, qs] = location.hash.replace(/^#\/?/, "").split("?");
   const [ruta, arg] = (hashRuta || "catalogo").split("/");
   if (qs && /nuevo=1/.test(qs)) { history.replaceState(null, "", "#/catalogo"); setTimeout(() => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`), 50); }
@@ -822,17 +915,22 @@ async function vTablero(main) {
 async function vCatalogo(main) {
   const u = S.ui;
   const cuenta = k => k === "INV" ? S.articulos.filter(enInventario).length : k === "" ? S.articulos.length : S.articulos.filter(a => a.estatus === k).length;
-  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px"><div><h1>Inventario</h1><p class="sub" style="margin:0">Catálogo con trazabilidad de cada pieza</p></div>
-    <div style="display:flex;gap:8px"><button class="btn hide-m" id="csv">Exportar CSV</button><button class="btn pri" id="nuevo">+ Nuevo artículo</button></div></div>
-  <div class="toolbar">
+  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px;gap:12px"><div style="min-width:0"><h1>Inventario</h1><p class="sub hide-m" style="margin:0">Catálogo con trazabilidad de cada pieza</p></div>
+    <div style="display:flex;gap:8px;flex:none"><button class="btn hide-m" id="csv">Exportar CSV</button><button class="btn pri" id="nuevo">+ <span class="hide-m">Nuevo artículo</span><span class="show-m">Nuevo</span></button></div></div>
+  <div id="centinela" style="height:1px"></div>
+  <div class="filtros"><div class="toolbar">
     <input class="in grow" id="q" type="search" placeholder="Buscar por nombre, ID, marca, orden, paquete…" value="${esc(u.q)}">
     <select class="in" id="fm"><option value="">Todas las marcas</option>${S.marcas.map(m => `<option${u.marca === m.nombre ? " selected" : ""}>${esc(m.nombre)}</option>`).join("")}</select>
     <select class="in" id="fp"><option value="">Pagado por: todos</option>${listas.pagador().map(p => `<option${u.pag === p ? " selected" : ""}>${esc(p)}</option>`).join("")}</select>
     <select class="in" id="fo">${[["reciente", "Más recientes"], ["nombre", "Nombre"], ["costo", "Mayor costo"], ["utilidad", "Mayor utilidad"], ["dias", "Más días en inventario"]].map(([k, l]) => `<option value="${k}"${u.orden === k ? " selected" : ""}>${l}</option>`).join("")}</select>
     <div class="seg"><button data-v="grid" class="${u.vista === "grid" ? "on" : ""}">▦ Fotos</button><button data-v="tabla" class="${u.vista === "tabla" ? "on" : ""}">☰ Tabla</button></div>
   </div>
-  <div class="chips">${[["INV", "En inventario"], ["", "Todos"], ...S.estatus.map(e => [e.clave, e.nombre])].map(([k, l]) => `<button class="chip${u.est === k ? " on" : ""}" data-e="${esc(k)}">${esc(l)}<b>${cuenta(k)}</b></button>`).join("")}</div>
+  <div class="chips">${[["INV", "En inventario"], ["", "Todos"], ...S.estatus.map(e => [e.clave, e.nombre])].map(([k, l]) => `<button class="chip${u.est === k ? " on" : ""}" data-e="${esc(k)}">${esc(l)}<b>${cuenta(k)}</b></button>`).join("")}</div></div>
   <div id="lista"></div>`;
+  // Al bajar, el buscador + marca + estatus quedan fijos arriba y aparece el botón "+"
+  const hh = $("header.top").offsetHeight;
+  S.obs = new IntersectionObserver(([e]) => document.body.classList.toggle("fijos", !e.isIntersecting && e.boundingClientRect.top < hh + 2), { rootMargin: `-${hh}px 0px 0px 0px` });
+  S.obs.observe($("#centinela"));
 
   const cols = [
     { k: "portada", l: "", h: r => r.portada ? `<img class="thumb" data-src="${esc(r.portada)}" alt="">` : `<span class="thumb"></span>` },
@@ -903,10 +1001,14 @@ async function vFicha(main, id) {
     <div class="soft" style="font-size:12px;letter-spacing:.05em;text-transform:uppercase">${esc(a.marca || "Sin marca")} · <span class="num">${esc(a.id)}</span></div>
     <h1 style="margin-top:4px">${esc(a.nombre)}</h1>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">${pillEst(a.estatus)}<span class="mute">${a.dias_en_inventario != null ? `${a.dias_en_inventario} días ${a.venta_id ? "hasta venderse" : "en inventario"}` : ""}</span></div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><select class="in" id="est" style="width:auto" title="Cambiar estatus">${ests.map(e => `<option value="${esc(e.clave)}"${e.clave === a.estatus ? " selected" : ""}>${esc(e.nombre)}</option>`).join("")}</select>
-    <button class="btn" id="edit">Editar</button>${!venta ? `<button class="btn pri" id="vender">Registrar venta</button>` : ""}</div>
+    <div class="acciones">
+      <div class="fila">${!venta ? `<button class="btn pri" id="vender">Registrar venta</button>` : ""}<button class="btn" id="cotizar">💲 Cotización</button></div>
+      <div class="fila"><select class="in" id="est" style="width:auto" title="Cambiar estatus">${ests.map(e => `<option value="${esc(e.clave)}"${e.clave === a.estatus ? " selected" : ""}>${esc(e.nombre)}</option>`).join("")}</select>
+        <button class="btn" id="edit">Editar</button></div>
+    </div>
   </div>
-  <div class="ficha" style="margin-top:16px">
+  <div id="pCot" class="hidden" style="margin-top:16px"></div>
+  <div class="ficha" id="pDet" style="margin-top:16px">
     <div>
       <div class="gal-main" id="gm">Sin fotos</div>
       <div class="gal" id="gal"></div>
@@ -937,8 +1039,9 @@ async function vFicha(main, id) {
         ${venta.guia || venta.paqueteria ? `<dt>Envío</dt><dd>${esc([venta.paqueteria, venta.guia].filter(Boolean).join(" "))}</dd>` : ""}
         <dt>Depósito</dt><dd>${venta.fecha_deposito ? `${fmt.date(venta.fecha_deposito)} · ${fmt.money(venta.monto_depositado)}` : '<span class="warn">Pendiente</span>'}</dd>
       </dl><div class="total"><span>Utilidad</span><span class="num ${signo(a.utilidad)}">${fmt.money(a.utilidad)} · ${fmt.pct(a.margen)}</span></div>`
-      : `<dl class="kv"><dt>Precio objetivo</dt><dd>${fmt.money(a.precio_objetivo)}</dd><dt>Canal</dt><dd>${esc(a.canal_objetivo || "—")}</dd></dl>
-         <div class="total"><span>Utilidad esperada</span><span class="num ${signo(a.utilidad_esperada)}">${fmt.money(a.utilidad_esperada)}${a.margen_esperado != null ? " · " + fmt.pct(a.margen_esperado) : ""}</span></div>`}</div>
+      : `<div class="mute">Aún sin vender.</div>
+         ${a.precio_objetivo ? `<dl class="kv" style="margin-top:8px"><dt>Precio objetivo</dt><dd>${fmt.money(a.precio_objetivo)}</dd></dl>` : ""}
+         <button class="btn sm" data-cot style="margin-top:10px">💲 Simular precio de venta</button>`}</div>
 
       <div class="card sec"><h2>Compra</h2><dl class="kv">
         <dt>Plataforma</dt><dd>${esc(a.plataforma_compra || "—")}</dd><dt>Vendedor</dt><dd>${esc(a.vendedor || "—")}</dd>
@@ -964,6 +1067,14 @@ async function vFicha(main, id) {
 
   $("#edit").onclick = () => abrirForm("articulos", S.articulos.find(x => x.id === id) && pick(a, MOD.articulos), {}, () => render());
   $("#vender") && ($("#vender").onclick = () => abrirForm("ventas", null, { articulo_id: id, precio_venta: a.precio_objetivo, canal: a.canal_objetivo }, () => render()));
+  const verCot = mostrar => {
+    $("#pCot").classList.toggle("hidden", !mostrar); $("#pDet").classList.toggle("hidden", mostrar);
+    $("#cotizar").innerHTML = mostrar ? "📋 Ver detalle" : "💲 Cotización";
+    $("#cotizar").classList.toggle("pri", mostrar && !!venta);
+    if (mostrar) cotizador($("#pCot"), a, venta);
+  };
+  $("#cotizar").onclick = () => verCot($("#pCot").classList.contains("hidden"));
+  $("[data-cot]") && ($("[data-cot]").onclick = () => { verCot(true); scrollTo(0, 0); });
   $("#evta") && ($("#evta").onclick = () => abrirForm("ventas", venta, {}, () => render()));
   $("#epaq") && ($("#epaq").onclick = () => abrirForm("paquetes", paq, {}, () => render()));
   $("#ncargo").onclick = () => abrirForm("cargos_tc", null, { articulo_id: id, fecha: new Date().toISOString().slice(0, 10) }, () => render());
@@ -1032,6 +1143,73 @@ async function vFicha(main, id) {
   const { data: h } = await sb.from("historial").select("*").eq("articulo_id", id).order("fecha", { ascending: false }).limit(200);
   $("#tl").innerHTML = h?.length ? `<ul class="tl">${h.map(r => lineaHist(r, true)).join("")}</ul>` : "Sin movimientos";
 }
+/* ---------- COTIZACIÓN: mini simulador de precio (no guarda nada) ---------- */
+function cotizador(cont, a, venta) {
+  const META = 0.5;                       // margen mínimo deseado sobre el precio de venta
+  const costo = Number(a.costo_total) || 0;
+  const faltan = [!a.pago_mxn && "precio pagado", a.envio_mxn_efectivo == null && "envío"].filter(Boolean);
+  const st = cotizador.st[a.id] ||= { sug: true, precio: null, canal: a.canal_objetivo || (S.canales.find(c => c.nombre === "Directo") ? "Directo" : ""), red: true };
+  const redondear = p => st.red ? Math.ceil(p / 50) * 50 : Math.round(p * 100) / 100;
+  cont.innerHTML = `<div class="grid two">
+    <div class="card">
+      <h2>Simulador de precio</h2>
+      <p class="soft" style="margin-top:0">Costo total del artículo: <b class="num">${fmt.money(costo)}</b> <span class="mute">(artículo + envío + impuestos)</span></p>
+      ${faltan.length ? `<div class="cot-msg mid" style="margin:0 0 12px">Falta capturar: ${faltan.join(" y ")}. El costo puede estar incompleto.</div>` : ""}
+      ${venta ? `<div class="cot-msg ok" style="margin:0 0 12px">Ya se vendió en ${fmt.money(venta.precio_venta)}. Esto es solo referencia.</div>` : ""}
+      <label class="toggle"><span><b>Precio sugerido</b><br><span class="mute" style="font-size:12px">El doble del costo · 50 % de margen</span></span><input type="checkbox" id="cSug"${st.sug ? " checked" : ""}><span class="knob"></span></label>
+      <div class="fld" style="margin-top:12px"><label for="cPrecio">Precio de venta (MXN)</label><input class="in num" id="cPrecio" type="number" step="any" inputmode="decimal" placeholder="Escribe tu precio"></div>
+      <div class="chips" style="margin:10px 0 0;padding:0;flex-wrap:wrap">${[1.5, 2, 2.5, 3].map(m => `<button class="chip" data-m="${m}">×${m}</button>`).join("")}</div>
+      <div class="fld" style="margin-top:12px"><label for="cCanal">¿Dónde lo vas a vender?</label><select class="in" id="cCanal">${S.canales.map(c => `<option value="${esc(c.nombre)}"${c.nombre === st.canal ? " selected" : ""}>${esc(c.nombre)}${Number(c.comision_pct) || Number(c.comision_fija) ? ` · ${c.comision_pct}% + ${fmt.money0(c.comision_fija)}` : " · sin comisión"}</option>`).join("")}</select></div>
+      <label class="sw" style="margin-top:6px"><input type="checkbox" id="cRed"${st.red ? " checked" : ""}> <span>Redondear a múltiplos de $50</span></label>
+    </div>
+    <div class="card" id="cRes"></div>
+  </div>
+  <p class="mute" style="font-size:12px;margin-top:10px">Es solo una simulación: no se guarda nada.</p>`;
+
+  const inP = $("#cPrecio", cont);
+  const pinta = () => {
+    const c = S.canales.find(x => x.nombre === st.canal) || { comision_pct: 0, comision_fija: 0 };
+    const pct = Number(c.comision_pct) / 100, fija = Number(c.comision_fija);
+    if (st.sug) { st.precio = costo ? redondear(costo * 2) : null; inP.value = st.precio ?? ""; }
+    inP.readOnly = st.sug; inP.style.opacity = st.sug ? .75 : 1;
+    const p = Number(st.precio) || 0;
+    const res = $("#cRes", cont);
+    if (!costo) { res.innerHTML = `<h2>Resultado</h2><div class="mute">Captura el costo del artículo (Editar → Compra) para poder simular.</div>`; return; }
+    if (!p) { res.innerHTML = `<h2>Resultado</h2><div class="mute">Escribe un precio o activa el sugerido.</div>`; return; }
+    const com = p * pct + (p ? fija : 0), neto = p - com, util = neto - costo, margen = util / p;
+    const pMin = pct < META ? redondear((costo + fija) / (META - pct)) : null;
+    const nivel = margen >= META - 1e-9 ? "ok" : margen >= .3 ? "mid" : "bad";
+    const color = { ok: "var(--green)", mid: "var(--amber)", bad: "var(--red)" }[nivel];
+    res.innerHTML = `<h2>Resultado</h2>
+      <div class="soft" style="font-size:12px">Margen</div>
+      <div class="cot-big" style="color:${color}">${fmt.pct(margen)}</div>
+      <div class="meter"><i style="width:${Math.max(0, Math.min(1, margen)) * 100}%;background:${color}"></i><b title="Meta 50 %"></b></div>
+      <div class="meter-l"><span>0 %</span><span>meta 50 %</span><span>100 %</span></div>
+      <dl class="kv" style="margin-top:14px">
+        <dt>Precio de venta</dt><dd>${fmt.money(p)}</dd>
+        <dt>Comisión (${esc(st.canal || "—")})</dt><dd>− ${fmt.money(com)}</dd>
+        <dt>Te queda</dt><dd>${fmt.money(neto)}</dd>
+        <dt>Costo total</dt><dd>− ${fmt.money(costo)}</dd>
+      </dl>
+      <div class="total"><span>Ganancia</span><span class="num ${signo(util)}">${fmt.money(util)}</span></div>
+      <div class="mute" style="font-size:12px;margin-top:6px">Ganas ${fmt.pct(util / costo)} sobre lo que invertiste · vendes a ${(p / costo).toFixed(2)}× el costo</div>
+      <div class="cot-msg ${nivel}">${nivel === "ok" ? "✅ Cumple la meta de 50 % de margen."
+        : `${nivel === "mid" ? "⚠️" : "⛔"} Debajo de la meta.${pMin ? ` Para 50 % real${pct ? ` después de la comisión de ${esc(st.canal)}` : ""} necesitas <b>${fmt.money(pMin)}</b>.` : ""}`}</div>
+      ${pMin && Math.abs(pMin - p) > 0.5 ? `<button class="btn sm" id="cUsarMin" style="margin-top:10px">Usar ${fmt.money(pMin)} (50 % real)</button>` : ""}
+      ${!venta ? `<button class="btn pri" id="cVender" style="margin-top:10px;width:100%">Registrar venta a este precio</button>` : ""}`;
+    $("#cUsarMin", res) && ($("#cUsarMin", res).onclick = () => { st.sug = false; $("#cSug", cont).checked = false; st.precio = pMin; inP.value = pMin; pinta(); });
+    $("#cVender", res) && ($("#cVender", res).onclick = () => abrirForm("ventas", null, { articulo_id: a.id, precio_venta: p, canal: st.canal }, () => render()));
+  };
+  $("#cSug", cont).onchange = e => { st.sug = e.target.checked; pinta(); };
+  $("#cRed", cont).onchange = e => { st.red = e.target.checked; if (!st.sug && st.precio) { st.precio = redondear(st.precio); inP.value = st.precio; } pinta(); };
+  $("#cCanal", cont).onchange = e => { st.canal = e.target.value; pinta(); };
+  inP.oninput = () => { st.precio = Number(inP.value) || null; pinta(); };
+  $$("[data-m]", cont).forEach(b => b.onclick = () => { st.sug = false; $("#cSug", cont).checked = false; st.precio = redondear(costo * Number(b.dataset.m)); inP.value = st.precio; pinta(); });
+  if (!st.sug && st.precio) inP.value = st.precio;
+  pinta();
+}
+cotizador.st = {};
+
 function pick(reg, M) { const o = {}; M.campos.forEach(c => { if (c.k) o[c.k] = reg[c.k]; }); o[M.pk] = reg[M.pk]; return o; }
 
 function lightbox(urls, i) {
