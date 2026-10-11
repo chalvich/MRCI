@@ -47,7 +47,17 @@ html{-webkit-tap-highlight-color:transparent}
 .brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:15px;letter-spacing:.02em}
 .brand .dot{width:24px;height:24px;border-radius:50%;border:3px solid var(--accent);position:relative;flex:none}
 .brand .dot::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--accent)}
-.user{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-soft)}
+.user{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-soft);position:relative}
+.avatar{width:36px;height:36px;border-radius:50%;border:1px solid var(--line-strong);background:var(--card2);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.avatar:hover,.avatar.on{border-color:var(--accent)}
+.menu-pop{position:absolute;right:0;top:46px;min-width:230px;background:var(--bg2);border:1px solid var(--line-strong);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.5);padding:6px;z-index:40}
+.menu-pop .who{padding:10px 12px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.menu-pop .who b{display:block;color:var(--text);font-size:13px}
+.menu-pop .who span{font-size:11.5px;color:var(--text-mute)}
+.menu-pop button,.menu-pop a{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:0;background:transparent;border-radius:8px;color:var(--text);font-size:13.5px;cursor:pointer;text-align:left}
+.menu-pop button:hover,.menu-pop a:hover{background:var(--card)}
+.menu-pop .sep{height:1px;background:var(--line);margin:4px 0}
+.menu-pop .out{color:var(--red)}
 nav.tabs{display:flex;gap:4px;padding:0 16px 10px;max-width:1400px;margin:0 auto;overflow-x:auto;scrollbar-width:none}
 nav.tabs::-webkit-scrollbar{display:none}
 nav.tabs a{padding:7px 12px;border-radius:999px;color:var(--text-soft);white-space:nowrap;font-weight:500}
@@ -703,24 +713,55 @@ const buscar = (filas, q, campos) => { const t = norm(q).trim(); if (!t) return 
 /* =====================================================================
    VISTAS
    ===================================================================== */
+/* Menú principal.  activo: false = oculto (el código sigue ahí, se reactiva cambiando a true)
+                   admin: true  = solo lo ven los correos de ADMINS */
 const RUTAS = [
-  ["tablero", "Tablero"], ["catalogo", "Inventario"], ["paquetes", "Paquetes"],
-  ["cargos", "Cargos TC"], ["ventas", "Ventas"], ["historial", "Historial"], ["ajustes", "Catálogos"],
+  { k: "tablero",   l: "Tablero",   activo: false },
+  { k: "catalogo",  l: "Inventario", activo: true },
+  { k: "paquetes",  l: "Paquetes",  activo: false },
+  { k: "cargos",    l: "Cargos TC", activo: false },
+  { k: "ventas",    l: "Ventas",    activo: true },
+  { k: "historial", l: "Historial", activo: true },
+  { k: "ajustes",   l: "Catálogos", activo: true, admin: true },
 ];
+const ADMINS = (CFG.ADMINS || ["salvador.jimenez.arroyo@gmail.com"]).map(e => e.toLowerCase());
+const esAdmin = () => ADMINS.includes((S.user?.email || "").toLowerCase());
+const puedeVer = k => { const r = RUTAS.find(x => x.k === k); return !r ? ["a", "usuario"].includes(k) : r.activo && (!r.admin || esAdmin()); };
+const nombreUsuario = () => S.usuarios.find(u => u.email.toLowerCase() === (S.user?.email || "").toLowerCase())?.nombre || (S.user?.email || "").split("@")[0];
+
+function cerrarMenu() { $(".menu-pop")?.remove(); $(".avatar")?.classList.remove("on"); }
+function abrirMenu() {
+  if ($(".menu-pop")) return cerrarMenu();
+  const pop = document.createElement("div");
+  pop.className = "menu-pop";
+  pop.innerHTML = `<div class="who"><b>${esc(nombreUsuario())}</b><span>${esc(S.user?.email || "")}</span></div>
+    <a href="#/usuario">⚙️ Usuario y contraseña</a>
+    ${PWA.prompt ? `<button data-inst>📲 Instalar app</button>` : ""}
+    <div class="sep"></div>
+    <button class="out" data-out>↩ Cerrar sesión</button>`;
+  $(".user").appendChild(pop);
+  $(".avatar").classList.add("on");
+  pop.onclick = async e => {
+    if (e.target.closest("a")) cerrarMenu();
+    if (e.target.closest("[data-inst]")) { cerrarMenu(); instalarPWA(); }
+    if (e.target.closest("[data-out]")) { await sb.auth.signOut(); location.reload(); }
+  };
+}
+document.addEventListener("click", e => { if (!e.target.closest(".user")) cerrarMenu(); });
 
 function shell(activa) {
   const root = $("#root");
   if (!$("header.top", root)) {
     root.innerHTML = `<header class="top"><div class="top-row"><div class="brand"><span class="dot"></span><span>${esc(CFG.NOMBRE_APP || "Inventario")}</span></div>
-      <div class="user"><button class="btn sm pri${PWA.prompt ? "" : " hidden"}" id="instalar">Instalar app</button><span class="email">${esc(S.user?.email || "")}</span><button class="btn sm" id="salir">Salir</button></div></div>
-      <nav class="tabs">${RUTAS.map(([k, l]) => `<a href="#/${k}" data-r="${k}">${l}</a>`).join("")}</nav></header>
+      <div class="user"><button class="avatar" id="avatar" aria-label="Menú de usuario" title="${esc(S.user?.email || "")}">${esc(nombreUsuario().charAt(0).toUpperCase())}</button></div></div>
+      <nav class="tabs">${RUTAS.filter(r => puedeVer(r.k)).map(r => `<a href="#/${r.k}" data-r="${r.k}">${r.l}</a>`).join("")}</nav></header>
       <main id="main"></main><button class="fab" id="fab" aria-label="Nuevo artículo">+</button>`;
-    $("#salir").onclick = async () => { await sb.auth.signOut(); location.reload(); };
-    $("#instalar").onclick = instalarPWA;
+    $("#avatar").onclick = abrirMenu;
     $("#fab").onclick = () => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`);
   }
   $$("nav.tabs a").forEach(a => a.classList.toggle("on", a.dataset.r === activa));
-  $("#fab").style.visibility = ["catalogo", "tablero"].includes(activa) ? "visible" : "hidden";
+  $("#fab").style.visibility = activa === "catalogo" ? "visible" : "hidden";
+  cerrarMenu();
   return $("#main");
 }
 
@@ -728,9 +769,10 @@ function render() {
   const [hashRuta, qs] = location.hash.replace(/^#\/?/, "").split("?");
   const [ruta, arg] = (hashRuta || "catalogo").split("/");
   if (qs && /nuevo=1/.test(qs)) { history.replaceState(null, "", "#/catalogo"); setTimeout(() => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`), 50); }
+  if (!puedeVer(ruta)) { history.replaceState(null, "", "#/catalogo"); return render(); }
   const activa = ruta === "a" ? "catalogo" : ruta;
   const main = shell(activa);
-  const v = { tablero: vTablero, catalogo: vCatalogo, a: vFicha, paquetes: vPaquetes, cargos: vCargos, ventas: vVentas, historial: vHistorial, ajustes: vAjustes }[ruta] || vCatalogo;
+  const v = { tablero: vTablero, catalogo: vCatalogo, a: vFicha, paquetes: vPaquetes, cargos: vCargos, ventas: vVentas, historial: vHistorial, ajustes: vAjustes, usuario: vUsuario }[ruta] || vCatalogo;
   Promise.resolve(v(main, arg)).catch(e => { console.error(e); main.innerHTML = `<div class="err">${esc(errMsg(e))}</div>`; });
 }
 window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
@@ -1138,6 +1180,34 @@ async function vHistorial(main) {
   await pinta();
 }
 
+/* ---------- USUARIO ---------- */
+function vUsuario(main) {
+  main.innerHTML = `<h1>Usuario</h1><p class="sub">Tu cuenta y tu contraseña</p>
+  <div class="grid two">
+    <div class="card"><h2>Mi cuenta</h2><dl class="kv">
+      <dt>Nombre</dt><dd>${esc(nombreUsuario())}</dd>
+      <dt>Correo</dt><dd>${esc(S.user?.email || "")}</dd>
+      <dt>Rol</dt><dd>${esAdmin() ? "Administrador" : "Usuario"}</dd></dl></div>
+    <div class="card"><h2>Cambiar contraseña</h2>
+      <p class="soft" style="margin-top:0">Mínimo 8 caracteres. Con ella entras sin esperar correos.</p>
+      <form id="cpf" style="display:flex;flex-direction:column;gap:8px">
+        <input type="email" value="${esc(S.user?.email || "")}" autocomplete="username" hidden>
+        <input class="in" type="password" id="np1" placeholder="Nueva contraseña" autocomplete="new-password" minlength="8" required>
+        <input class="in" type="password" id="np2" placeholder="Repite la contraseña" autocomplete="new-password" minlength="8" required>
+        <button class="btn pri">Guardar contraseña</button>
+      </form></div>
+  </div>`;
+  $("#cpf").onsubmit = async e => {
+    e.preventDefault();
+    const p1 = $("#np1").value, p2 = $("#np2").value;
+    if (p1.length < 8) return toast("Usa al menos 8 caracteres.", true);
+    if (p1 !== p2) return toast("Las contraseñas no coinciden.", true);
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) return toast(/different/i.test(error.message) ? "Esa ya es tu contraseña actual." : /weak|short/i.test(error.message) ? "Contraseña muy débil: usa letras y números." : errMsg(error), true);
+    $("#cpf").reset(); toast("Contraseña guardada ✓");
+  };
+}
+
 /* ---------- CATÁLOGOS / AJUSTES ---------- */
 function vAjustes(main) {
   main.innerHTML = `<h1>Catálogos</h1><p class="sub">Listas que alimentan los formularios</p>
@@ -1145,14 +1215,6 @@ function vAjustes(main) {
     <div class="card"><div class="sec-h"><h2>Marcas</h2><button class="btn sm" data-n="marcas">+ Marca</button></div><div id="tm"></div></div>
     <div class="card"><div class="sec-h"><h2>Canales de venta</h2><button class="btn sm" data-n="canales">+ Canal</button></div><div id="tc"></div></div>
     <div class="card"><div class="sec-h"><h2>Estatus (flujo)</h2><button class="btn sm" data-n="estatus">+ Estatus</button></div><div id="te"></div></div>
-    <div class="card"><h2>Mi contraseña</h2>
-      <p class="soft" style="margin-top:0">Ponle contraseña a tu cuenta (<b>${esc(S.user?.email || "")}</b>) para entrar sin esperar correos. Mínimo 8 caracteres.</p>
-      <form id="cpf" style="display:flex;flex-direction:column;gap:8px">
-        <input type="email" value="${esc(S.user?.email || "")}" autocomplete="username" hidden>
-        <input class="in" type="password" id="np1" placeholder="Nueva contraseña" autocomplete="new-password" minlength="8" required>
-        <input class="in" type="password" id="np2" placeholder="Repite la contraseña" autocomplete="new-password" minlength="8" required>
-        <button class="btn pri">Guardar contraseña</button>
-      </form></div>
     <div class="card"><h2>Usuarios con acceso</h2>${S.usuarios.map(u => `<div style="padding:4px 0">${esc(u.nombre || "")} <span class="mute">${esc(u.email)}</span></div>`).join("")}
       <p class="mute" style="font-size:12px">Para agregar a alguien: Supabase → Table Editor → <b>usuarios_permitidos</b> → Insert row.</p></div>
     <div class="card" style="grid-column:1/-1"><h2>Importar fotos en lote</h2>
@@ -1164,15 +1226,6 @@ function vAjustes(main) {
   tabla($("#tc"), { filas: S.canales, clave: "cc", alClick: c => abrirForm("canales", c), cols: [{ k: "nombre", l: "Canal" }, { k: "comision_pct", l: "%", r: 1 }, { k: "comision_fija", l: "Fija", r: 1, f: fmt.money }] });
   tabla($("#te"), { filas: S.estatus, clave: "ce", alClick: e => abrirForm("estatus", e), cols: [{ k: "orden", l: "#", r: 1 }, { k: "nombre", l: "Estatus", h: r => pillEst(r.clave) }, { k: "clave", l: "Clave" }] });
   $$("[data-n]", main).forEach(b => b.onclick = () => abrirForm(b.dataset.n));
-  $("#cpf").onsubmit = async e => {
-    e.preventDefault();
-    const p1 = $("#np1").value, p2 = $("#np2").value;
-    if (p1.length < 8) return toast("Usa al menos 8 caracteres.", true);
-    if (p1 !== p2) return toast("Las contraseñas no coinciden.", true);
-    const { error } = await sb.auth.updateUser({ password: p1 });
-    if (error) return toast(/different/i.test(error.message) ? "Esa ya es tu contraseña actual." : /weak|short/i.test(error.message) ? "Contraseña muy débil: usa letras y números." : errMsg(error), true);
-    $("#cpf").reset(); toast("Contraseña guardada ✓ Ya puedes entrar con ella.");
-  };
   $("#lote").onchange = async e => {
     const files = [...e.target.files]; e.target.value = "";
     const log = $("#log"); log.classList.remove("hidden"); log.textContent = "";
@@ -1208,7 +1261,7 @@ function pantallaLogin(msg = "") {
     <div class="or">¿primera vez u olvidaste tu contraseña?</div>
     <button class="btn" id="verlink" type="button">Entrar con un enlace a mi correo</button>
     <form id="mf" class="hidden" style="display:flex;flex-direction:column;gap:8px"><input class="in" type="email" id="mail" placeholder="tu@correo.com" required><button class="btn pri">Enviarme el enlace</button>
-      <span class="mute" style="font-size:12px">Después de entrar, ve a <b>Catálogos → Mi contraseña</b> para ponerle una.</span></form>
+      <span class="mute" style="font-size:12px">Después de entrar, abre el menú de arriba a la derecha → <b>Usuario y contraseña</b> para ponerle una.</span></form>
   </div></div>`;
   $("#pf").onsubmit = async e => {
     e.preventDefault();
@@ -1263,13 +1316,13 @@ const PWA = {
   esIOS: /iphone|ipad|ipod/i.test(navigator.userAgent),
   instalada: matchMedia("(display-mode: standalone)").matches || navigator.standalone === true,
 };
-window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); PWA.prompt = e; $("#instalar")?.classList.remove("hidden"); });
-window.addEventListener("appinstalled", () => { PWA.prompt = null; $("#instalar")?.classList.add("hidden"); toast("App instalada ✓"); });
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); PWA.prompt = e;  });
+window.addEventListener("appinstalled", () => { PWA.prompt = null;  toast("App instalada ✓"); });
 async function instalarPWA() {
   if (!PWA.prompt) return;
   PWA.prompt.prompt();
   await PWA.prompt.userChoice;
-  PWA.prompt = null; $("#instalar")?.classList.add("hidden");
+  PWA.prompt = null; 
 }
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW", e)));
 
