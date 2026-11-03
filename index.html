@@ -147,6 +147,15 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .bal{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;align-items:start}
 .bal-k{display:flex;flex-direction:column;gap:14px}
 .bal-k .kpi .v{font-size:26px}
+.art-sel{display:flex;flex-direction:column;gap:8px}
+.art-list{max-height:420px;overflow-y:auto;margin:0 -8px;display:flex;flex-direction:column;gap:2px;overscroll-behavior:contain}
+.art-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:8px;cursor:pointer;color:var(--text)}
+.art-row:hover{background:var(--card2)}
+.art-row.on{border-color:var(--accent);background:var(--accent-bg)}
+.art-row span{min-width:0;display:flex;flex-direction:column}
+.art-row b{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-row small{font-size:11.5px;color:var(--text-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-row em{font-style:normal;font-size:12.5px;font-weight:650;font-variant-numeric:tabular-nums;flex:none}
 .tl-bar{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
 .tl-bar .mes{min-width:150px;text-align:center;font-weight:650;line-height:1.25}
 .tl-bar .mes .mute{font-weight:400}
@@ -156,7 +165,7 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .tl-rango{flex:1;min-width:180px}
 .tl-rango input{width:100%;accent-color:var(--accent);margin:0}
 .tl-ext{display:flex;justify-content:space-between;font-size:11px;color:var(--text-mute)}
-@media (max-width:899px){.bal{grid-template-columns:minmax(0,1fr)}.bal-k{display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width:899px){.bal{grid-template-columns:minmax(0,1fr)}.bal-k{display:grid;grid-template-columns:1fr 1fr}.art-sel{grid-column:1/-1}}
 @media (max-width:640px){.bal-k{display:none}.tl-bar .mes{flex:1;min-width:0}.tl-rango{flex-basis:100%;order:5}#tPlay{order:4;flex-basis:100%}}
 .bd h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-mute);margin:18px 0 6px;font-weight:600}
 .bd-row{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
@@ -425,11 +434,13 @@ const destinosLista = () => unicos([...pagadores().map(p => `Pago tarjeta ${nomb
 const VIZ = ["#3987e5", "#d95926", "#199e70", "#9085e9", "#c98500", "#d55181", "#e66767"];   // paleta validada (oscuro)
 const VIZ_GRIS = "#6e8195";
 // personas: azul, naranja, amarillo, magenta, rojo · ahorro = aqua, otros = violeta (orden fijo, nunca se recicla)
-function colorPersona(p) { const i = pagadores().indexOf((p || "").toUpperCase()); return i < 0 ? VIZ_GRIS : [VIZ[0], VIZ[1], VIZ[4], VIZ[5], VIZ[6]][i] || VIZ_GRIS; }
+// Roles fijos de color: CG azul · Chava naranja · ganancia aqua · ahorro violeta · inventario amarillo · costo recuperado magenta · otros rojo · disponible gris
+const C_GAN = VIZ[2], C_AHO = VIZ[3], C_INV = VIZ[4], C_COSTO = VIZ[5], C_OTROS = VIZ[6], C_VENTA = "#9fb0c2";
+function colorPersona(p) { const i = pagadores().indexOf((p || "").toUpperCase()); return [VIZ[0], VIZ[1]][i] || VIZ_GRIS; }
 function colorDestino(d) {
   const p = pagadores().find(x => norm(d).endsWith(" " + norm(nombreP(x))));
   if (p) return colorPersona(p);
-  return { ahorro: VIZ[2], otros: VIZ[3], disponible: VIZ_GRIS }[norm(d)] || VIZ[5];
+  return { ahorro: C_AHO, otros: C_OTROS, disponible: VIZ_GRIS }[norm(d)] || C_OTROS;
 }
 
 /* =====================================================================
@@ -1604,97 +1615,161 @@ function calcularBalance(hastaMes, esUltimo) {
   const pers = pagadores();
   const grupos = [...pers, ""];
   const clave = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
-  const pagado = {}, recup = {}, gan = {}, nArt = {}, nVend = {};
-  grupos.forEach(g => { pagado[g] = recup[g] = gan[g] = 0; nArt[g] = nVend[g] = 0; });
+  const z = () => Object.fromEntries(grupos.map(g => [g, 0]));
+  const pagado = z(), costoVend = z(), costoInv = z(), gan = z(), recup = z(), nArt = z(), nVend = z();
   let sinFecha = 0;
   S.articulos.forEach(a => {
-    const g = clave(a);
-    if (ok(a.fecha_compra)) { pagado[g] += Number(a.costo_total) || 0; nArt[g]++; }
-    if (a.venta_id) { if (!a.fecha_venta) sinFecha++; if (ok(a.fecha_venta)) { recup[g] += Number(a.ingreso_neto) || 0; gan[g] += Number(a.utilidad) || 0; nVend[g]++; } }
+    const g = clave(a), costo = Number(a.costo_total) || 0;
+    if (a.venta_id && !a.fecha_venta) sinFecha++;
+    const vendido = a.venta_id && ok(a.fecha_venta);
+    if (!ok(a.fecha_compra) && !vendido) return;
+    pagado[g] += costo; nArt[g]++;
+    if (vendido) { costoVend[g] += costo; gan[g] += Number(a.utilidad) || 0; recup[g] += Number(a.ingreso_neto) || 0; nVend[g]++; }
+    else costoInv[g] += costo;
   });
   const dest = {};
   S.movs.filter(m => ok(m.fecha)).forEach(m => { dest[m.destino] = (dest[m.destino] || 0) + Number(m.monto_mxn); });
-  const totRec = sum(grupos, g => recup[g]), totDest = sum(Object.keys(dest), k => dest[k]);
-  return { grupos: grupos.filter(g => pagado[g] || recup[g]), pagado, recup, gan, nArt, nVend, dest, sinFecha,
-    disponible: Math.max(0, totRec - totDest), exceso: Math.max(0, totDest - totRec), totRec, totDest,
-    totPag: sum(grupos, g => pagado[g]), totGan: sum(grupos, g => gan[g]) };
+  const t = o => sum(grupos, g => o[g]);
+  const totRec = t(recup), totDest = sum(Object.keys(dest), k => dest[k]);
+  return { grupos: grupos.filter(g => pagado[g]), pagado, costoVend, costoInv, gan, recup, nArt, nVend, dest, sinFecha,
+    totPag: t(pagado), totCostoVend: t(costoVend), totInv: t(costoInv), totGan: t(gan), totRec, totDest,
+    disponible: Math.max(0, totRec - totDest), exceso: Math.max(0, totDest - totRec) };
 }
 
-function dibujarSankey(svgCont, B, info) {
+/* Modelo global: Pagado (CG/Chava) → Resultado (inventario · costo recuperado · ganancia) → Destino (movimientos)
+   Las tarjetas se pagan primero con el costo recuperado; ahorro y otros salen primero de la ganancia. */
+function modeloGlobal(B) {
+  const P = B.grupos.map(g => ({ id: "p:" + g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: B.pagado[g],
+    info: `<b>${esc(nombreP(g))}</b> ha pagado <b>${fmt.money(B.pagado[g])}</b> en ${B.nArt[g]} artículos (costo + envío + impuestos) · ${B.nVend[g]} ya vendidos.` }));
+  const ganTot = Math.max(0, B.totGan);
+  const nInv = { id: "m:inv", label: "En inventario", color: C_INV, value: B.totInv, info: `<b>${fmt.money(B.totInv)}</b> siguen invertidos en mercancía sin vender.` };
+  const nCos = { id: "m:cos", label: "Costo recuperado", color: C_COSTO, value: B.totCostoVend, info: `<b>${fmt.money(B.totCostoVend)}</b> regresaron de las ventas para reponer lo que se pagó (tarjetas).` };
+  const nGan = { id: "m:gan", label: "Ganancia", color: C_GAN, value: ganTot, info: `<b>${fmt.money(B.totGan)}</b> de ganancia limpia en ${sum(B.grupos, g => B.nVend[g])} ventas (ya sin comisiones ni envíos).` };
+  const M = [nInv, nCos, nGan].filter(n => n.value > 0.5);
+  const links = [];
+  B.grupos.forEach(g => {
+    const p = P.find(x => x.id === "p:" + g);
+    if (B.costoInv[g] > 0.5) links.push({ s: p, t: nInv, v0: B.costoInv[g], v1: B.costoInv[g] });
+    if (B.costoVend[g] > 0.5) links.push({ s: p, t: nCos, v0: B.costoVend[g], v1: B.costoVend[g] });
+    if (B.gan[g] > 0.5 && ganTot > 0) links.push({ s: p, t: nGan, v0: 0, v1: B.gan[g] });
+  });
+  // reparto de lo recuperado hacia los destinos
+  let poolC = B.totCostoVend, poolG = ganTot;
+  const D = [];
+  const toma = (n, a, primero) => {
+    const orden = primero === "c" ? [["c", nCos], ["g", nGan]] : [["g", nGan], ["c", nCos]];
+    let r = a;
+    orden.forEach(([k, src]) => { const disp = k === "c" ? poolC : poolG; const x = Math.min(r, disp); if (x > 0.5) { links.push({ s: src, t: n, v0: x, v1: x }); r -= x; if (k === "c") poolC -= x; else poolG -= x; } });
+    if (r > 0.5) links.push({ s: primero === "c" ? nCos : nGan, t: n, v0: 0, v1: r });
+  };
+  destinosLista().filter(d => B.dest[d] > 0).forEach(d => {
+    const tarjeta = /^pago tarjeta/i.test(d);
+    const n = { id: "d:" + d, label: d, color: colorDestino(d), value: B.dest[d], info: `<b>${esc(d)}</b>: ${fmt.money(B.dest[d])} (${fmt.pct(B.totRec ? B.dest[d] / B.totRec : null)} de lo recuperado).` };
+    D.push(n); toma(n, B.dest[d], tarjeta ? "c" : "g");
+  });
+  if (poolC + poolG > 0.5) {
+    const n = { id: "d:disp", label: "Disponible", color: VIZ_GRIS, value: poolC + poolG, info: `<b>${fmt.money(poolC + poolG)}</b> recuperados que aún no se asignan${poolG > 0.5 ? ` (${fmt.money(poolG)} son ganancia)` : ""}.` };
+    D.push(n);
+    if (poolC > 0.5) links.push({ s: nCos, t: n, v0: poolC, v1: poolC });
+    if (poolG > 0.5) links.push({ s: nGan, t: n, v0: poolG, v1: poolG });
+  }
+  return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links };
+}
+
+/* Modelo por artículo: Costo → Venta → Reparto */
+function modeloArticulo(a) {
+  const pag = (a.pagado_por || "").toUpperCase(), quien = nombreP(pag), cP = pag ? colorPersona(pag) : VIZ_GRIS;
+  const comp = [["Artículo", Number(a.pago_mxn) || 0, cP], ["Envío internacional", Number(a.envio_mxn_efectivo) || 0, C_INV],
+    ["Impuestos", Number(a.impuestos_mxn) || 0, C_COSTO], ["Otros costos", Number(a.otros_costos_mxn) || 0, C_OTROS]]
+    .filter(c => c[1] > 0.5).map(([l, v, c]) => ({ id: "c:" + l, label: l, color: c, value: v, info: `<b>${l}</b>: ${fmt.money(v)}${l === "Artículo" ? ` · pagado por ${esc(quien)}` : ""}.` }));
+  const costo = Number(a.costo_total) || 0, links = [];
+  if (!a.venta_id) {
+    const n = { id: "m:inv", label: "Sin vender", color: C_INV, value: costo, info: `Aún sin vender. Usa <b>💲 Cotización</b> en la ficha para simular su precio.` };
+    comp.forEach(c => links.push({ s: c, t: n, v0: c.value, v1: c.value }));
+    return { headers: ["Costo", "Estado", ""], cols: [comp, costo ? [n] : [], []], links };
+  }
+  const precio = Number(a.precio_venta) || 0, com = Number(a.comision_mxn) || 0, env = Number(a.envio_venta_mxn) || 0;
+  const neto = precio - com - env, repone = Math.max(0, Math.min(costo, neto)), ganancia = Math.max(0, neto - costo), perdida = Math.max(0, costo - neto);
+  const venta = { id: "v", label: `Venta${a.canal_venta ? " · " + a.canal_venta : ""}`, color: C_VENTA, value: precio, info: `Se vendió en <b>${fmt.money(precio)}</b>${a.fecha_venta ? " el " + fmt.date(a.fecha_venta) : ""}${a.canal_venta ? " por " + esc(a.canal_venta) : ""}.` };
+  comp.forEach(c => links.push({ s: c, t: venta, v0: c.value, v1: costo ? c.value * precio / costo : 0 }));
+  const R = [["Comisión", com, C_OTROS, `Comisión de la plataforma: ${fmt.money(com)}.`], ["Envío local", env, C_INV, `Envío al cliente: ${fmt.money(env)}.`],
+    [`Repone tarjeta ${quien}`, repone, cP, `<b>${fmt.money(repone)}</b> regresan para cubrir lo que pagó ${esc(quien)}${perdida ? ` (faltaron ${fmt.money(perdida)}: hubo pérdida)` : ""}.`],
+    ["Ganancia", ganancia, C_GAN, `<b>${fmt.money(ganancia)}</b> de ganancia · margen ${fmt.pct(a.margen)}.`]]
+    .filter(r => r[1] > 0.5).map(([l, v, c, inf]) => ({ id: "r:" + l, label: l, color: c, value: v, info: inf }));
+  R.forEach(r => links.push({ s: venta, t: r, v0: r.value, v1: r.value }));
+  return { headers: ["Costo", "Venta", "Reparto"], cols: [comp, precio ? [venta] : [], R], links };
+}
+
+function dibujarSankey(svgCont, mod, info) {
   const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(560, Math.max(420, W * 0.55)), TOP = 28, BW = 12, MINSLOT = movil ? 40 : 44, GAP = 10;
-  const pers = B.grupos.map(g => ({ id: "p:" + g, g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS }));
-  const c1 = pers.map(n => ({ ...n, value: B.pagado[n.g] })).filter(n => n.value > 0);
-  const c2 = pers.map(n => ({ ...n, id: "r:" + n.g, value: B.recup[n.g] })).filter(n => n.value > 0);
-  const destOrden = destinosLista().filter(d => B.dest[d] > 0).concat(Object.keys(B.dest).filter(d => !destinosLista().includes(d) && B.dest[d] > 0));
-  const c3 = destOrden.map(d => ({ id: "d:" + d, label: d, color: colorDestino(d), value: B.dest[d] }));
-  if (B.disponible > 0.5) c3.push({ id: "d:disp", label: "Disponible", color: VIZ_GRIS, value: B.disponible });
-  const cols = [c1, c2, c3];
-  if (!c1.length && !c2.length) { svgCont.innerHTML = `<div class="empty">Sin datos en este periodo</div>`; return; }
+  const cols = mod.cols;
+  if (!cols.some(c => c.length)) { svgCont.innerHTML = `<div class="empty">Sin datos en este periodo</div>`; return; }
   const maxTot = Math.max(...cols.map(c => sum(c, n => n.value)), 1);
   const disp = H - TOP - 8;
   const k = (disp - GAP * Math.max(...cols.map(c => Math.max(0, c.length - 1)))) / maxTot;
   const xs = [0, W / 2 - BW / 2, W - BW];
   cols.forEach((c, ci) => {
-    c.forEach(n => { n.h = Math.max(n.value * k, 3); n.slot = Math.max(n.h, MINSLOT); });
+    c.forEach(n => { n.h = Math.max(n.value * k, 3); n.slot = Math.max(n.h, MINSLOT); n.ci = ci; });
     const alto = sum(c, n => n.slot) + GAP * Math.max(0, c.length - 1);
     let y = TOP + Math.max(0, (disp - alto) / 2);
     c.forEach(n => { n.y = y + (n.slot - n.h) / 2; n.x = xs[ci]; n.outY = n.y; n.inY = n.y; y += n.slot + GAP; });
   });
-  const links = [];
-  c1.forEach(a => { const b = c2.find(x => x.g === a.g); if (b) links.push({ s: a, t: b, w0: a.h, w1: b.h }); });
-  const totR = sum(c2, n => n.value), totD = sum(c3, n => n.value);
-  if (totR > 0 && totD > 0) c2.forEach(a => c3.forEach(b => links.push({ s: a, t: b, w0: a.h * b.value / totD, w1: b.h * a.value / totR })));
   const defs = [], bands = [];
-  links.forEach((l, i) => {
+  mod.links.forEach((l, i) => {
+    const w0 = l.v0 * k, w1 = l.v1 * k;
+    if (w0 + w1 < 0.3) return;
     const x0 = l.s.x + BW, x1 = l.t.x, xm = (x0 + x1) / 2;
-    const y0 = l.s.outY, y1 = l.t.inY; l.s.outY += l.w0; l.t.inY += l.w1;
+    const y0 = l.s.outY, y1 = l.t.inY; l.s.outY += w0; l.t.inY += w1;
     defs.push(`<linearGradient id="sg${i}" x1="0" x2="1"><stop offset="0" stop-color="${l.s.color}"/><stop offset="1" stop-color="${l.t.color}"/></linearGradient>`);
-    bands.push(`<path class="band" data-s="${esc(l.s.id)}" data-t="${esc(l.t.id)}" fill="url(#sg${i})" fill-opacity=".38" d="M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + l.w1} C${xm},${y1 + l.w1} ${xm},${y0 + l.w0} ${x0},${y0 + l.w0} Z"><title>${esc(l.s.label)} → ${esc(l.t.label)}</title></path>`);
+    bands.push(`<path class="band" data-s="${esc(l.s.id)}" data-t="${esc(l.t.id)}" fill="url(#sg${i})" fill-opacity=".38" d="M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + w1} C${xm},${y1 + w1} ${xm},${y0 + w0} ${x0},${y0 + w0} Z"><title>${esc(l.s.label)} → ${esc(l.t.label)}</title></path>`);
   });
-  const nodo = (n, ci) => {
-    const cx = ci === 0 ? n.x + BW + 8 : n.x - 8, anc = ci === 0 ? "start" : "end", my = n.y + n.h / 2;
+  const nodo = n => {
+    const cx = n.ci === 0 ? n.x + BW + 8 : n.x - 8, anc = n.ci === 0 ? "start" : "end", my = n.y + n.h / 2;
     return `<g class="node" data-id="${esc(n.id)}" style="cursor:pointer"><rect x="${n.x}" y="${n.y}" width="${BW}" height="${n.h}" rx="3" fill="${n.color}"/>
       <rect x="${n.x - 6}" y="${n.y - 6}" width="${BW + 12}" height="${n.h + 12}" fill="transparent"/>
       <text class="lbl" x="${cx}" y="${my - 3}" text-anchor="${anc}">${esc(n.label)}</text>
       <text class="amt" x="${cx}" y="${my + 13}" text-anchor="${anc}">${fmt.money0(n.value)}</text></g>`;
   };
-  svgCont.innerHTML = `<svg class="sankey" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero: pagado, recuperado y destino">
+  const [h0, h1, h2] = mod.headers;
+  svgCont.innerHTML = `<svg class="sankey" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero">
     <defs>${defs.join("")}</defs>
-    <text class="hdr" x="0" y="12">Pagado</text><text class="hdr" x="${W / 2}" y="12" text-anchor="middle">Recuperado</text><text class="hdr" x="${W}" y="12" text-anchor="end">Destino</text>
-    ${bands.join("")}${c1.map(n => nodo(n, 0)).join("")}${c2.map(n => nodo(n, 1)).join("")}${c3.map(n => nodo(n, 2)).join("")}</svg>`;
-  const svg = $("svg", svgCont);
-  const todos = [...c1, ...c2, ...c3];
+    <text class="hdr" x="0" y="12">${esc(h0)}</text><text class="hdr" x="${W / 2}" y="12" text-anchor="middle">${esc(h1)}</text><text class="hdr" x="${W}" y="12" text-anchor="end">${esc(h2)}</text>
+    ${bands.join("")}${cols.flat().map(nodo).join("")}</svg>`;
+  const svg = $("svg", svgCont), todos = cols.flat();
   const foco = id => {
-    if (!id) { svg.classList.remove("foco"); $$(".on", svg).forEach(e => e.classList.remove("on")); info.innerHTML = "Toca una barra para ver su detalle."; return; }
-    svg.classList.add("foco"); $$(".on", svg).forEach(e => e.classList.remove("on"));
+    $$(".on", svg).forEach(e => e.classList.remove("on"));
+    if (!id) { svg.classList.remove("foco"); info.innerHTML = "Toca una barra para ver su detalle."; return; }
+    svg.classList.add("foco");
     $$(".band", svg).forEach(b => { if (b.dataset.s === id || b.dataset.t === id) { b.classList.add("on"); $(`.node[data-id="${CSS.escape(b.dataset.s === id ? b.dataset.t : b.dataset.s)}"]`, svg)?.classList.add("on"); } });
     $(`.node[data-id="${CSS.escape(id)}"]`, svg)?.classList.add("on");
-    const n = todos.find(x => x.id === id), tipo = id[0];
-    info.innerHTML = tipo === "p" ? `<b>${esc(n.label)}</b> ha pagado <b>${fmt.money(n.value)}</b> en ${B.nArt[n.g]} artículos (costo + envío + impuestos).`
-      : tipo === "r" ? `De lo que pagó <b>${esc(n.label)}</b> se han recuperado <b>${fmt.money(n.value)}</b> en ${B.nVend[n.g]} ventas · ganancia ${fmt.money(B.gan[n.g])}.`
-      : `<b>${esc(n.label)}</b>: ${fmt.money(n.value)} (${fmt.pct(B.totRec ? n.value / B.totRec : null)} de lo recuperado).`;
+    info.innerHTML = todos.find(x => x.id === id)?.info || "";
   };
   let actual = null;
-  svg.addEventListener("click", e => { const g = e.target.closest(".node"); const id = g?.dataset.id || null; actual = actual === id ? null : id; foco(actual); });
+  svg.addEventListener("click", e => { const id = e.target.closest(".node")?.dataset.id || null; actual = actual === id ? null : id; foco(actual); });
   if (matchMedia("(hover:hover)").matches) {
     svg.addEventListener("mouseover", e => { const g = e.target.closest(".node"); if (g && !actual) foco(g.dataset.id); });
     svg.addEventListener("mouseleave", () => { if (!actual) foco(null); });
   }
   foco(null);
+  return todos;
 }
 
 function vBalance(main) {
   const meses = mesesBalance();
-  const st = (vBalance.st ||= {});
+  const st = (vBalance.st ||= { art: null, q: "" });
   if (st.idx == null || st.idx >= meses.length) st.idx = meses.length - 1;
+  if (st.art && !artDe(st.art)) st.art = null;
   clearInterval(vBalance.play); vBalance.play = null;
-  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px"><div><h1>Balance</h1><p class="sub hide-m" style="margin:0">Cuánto ha pagado cada quien, cuánto se ha recuperado y a dónde se fue</p></div>
+  const movil = matchMedia("(max-width:640px)").matches;
+  if (movil) st.art = null;
+  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px"><div><h1>Balance</h1><p class="sub hide-m" style="margin:0" id="bSub"></p></div>
     <a class="btn hide-m" href="#/movimientos">Movimientos</a></div>
     ${S.sinMovs ? `<div class="cot-msg mid" style="margin:0 0 14px">Falta crear la tabla de movimientos: corre <b>sql/04_movimientos.sql</b> en Supabase.</div>` : ""}
     <div class="bal">
       <div class="card">
+        <div id="bArt" class="hidden" style="margin-bottom:10px"></div>
         <div id="sk"></div><div class="legend" id="sl"></div><div class="sk-info" id="si"></div>
-        <div class="tl-bar">
+        <div class="tl-bar" id="tBar">
           <button class="btn icon tl-nav" id="tPrev" aria-label="Mes anterior" title="Mes anterior (←)">‹</button>
           <div class="mes"><div class="mute" style="font-size:11px">Acumulado hasta</div><div id="tMes"></div></div>
           <button class="btn icon tl-nav" id="tNext" aria-label="Mes siguiente" title="Mes siguiente (→)">›</button>
@@ -1704,25 +1779,55 @@ function vBalance(main) {
         </div>
         <div class="mute" id="tNota" style="font-size:11.5px;margin-top:8px"></div>
       </div>
-      <div class="bal-k" id="bk"></div>
+      <div class="bal-k"><div id="bk" class="bal-k" style="display:contents"></div>
+        <div class="card art-sel"><h2 style="margin-bottom:8px">Por artículo</h2>
+          <input class="in" id="aQ" type="search" placeholder="Buscar artículo…" value="${esc(st.q)}">
+          <div class="art-list" id="aL"></div></div>
+      </div>
     </div>`;
+  const leyenda = cols => $("#sl").innerHTML = unicos(cols.flat().map(n => `${n.color}|${n.label.replace(/^Venta · .*/, "Venta")}`)).map(x => { const [c, l] = x.split("|"); return `<span><i style="background:${c}"></i>${esc(l)}</span>`; }).join("");
+  const kpi = (l, v, sub, cls = "") => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="s">${sub}</div></div>`;
   const pinta = () => {
-    const ultimo = st.idx === meses.length - 1;
-    const B = calcularBalance(meses[st.idx], ultimo);
-    $("#tMes").textContent = nombreMes(meses[st.idx]);
-    $("#tRange").value = st.idx;
-    $("#tPrev").disabled = st.idx === 0; $("#tNext").disabled = ultimo;
-    $("#tNota").textContent = B.sinFecha && !ultimo ? `${B.sinFecha} ventas sin fecha de venta aparecen hasta el mes actual. Captúrales la fecha para verlas en su mes.` : "";
-    $("#bk").innerHTML = `<div class="card kpi"><div class="l">Pagado</div><div class="v">${fmt.money0(B.totPag)}</div><div class="s">Costo + envío + impuestos</div></div>
-      <div class="card kpi"><div class="l">Recuperado en ventas</div><div class="v">${fmt.money0(B.totRec)}</div><div class="s">Ganancia <span class="${signo(B.totGan)}">${fmt.money0(B.totGan)}</span></div></div>
-      <div class="card kpi"><div class="l">Asignado</div><div class="v">${fmt.money0(B.totDest)}</div><div class="s">Tarjetas, ahorro y otros</div></div>
-      <div class="card kpi"><div class="l">Disponible</div><div class="v ${B.exceso ? "neg" : ""}">${fmt.money0(B.exceso ? -B.exceso : B.disponible)}</div><div class="s">${B.exceso ? "Se asignó más de lo recuperado" : "Recuperado sin asignar"}</div></div>`;
-    dibujarSankey($("#sk"), B, $("#si"));
-    const ley = [...B.grupos.map(g => [nombreP(g), g ? colorPersona(g) : VIZ_GRIS]),
-      ...destinosLista().filter(d => B.dest[d] && !pagadores().some(p => colorDestino(d) === colorPersona(p))).map(d => [d, colorDestino(d)]),
-      ...(B.disponible > 0.5 ? [["Disponible", VIZ_GRIS]] : [])];
-    $("#sl").innerHTML = unicos(ley.map(x => x.join("|"))).map(x => { const [l, c] = x.split("|"); return `<span><i style="background:${c}"></i>${esc(l)}</span>`; }).join("");
+    const a = st.art && artDe(st.art);
+    $("#tBar").classList.toggle("hidden", !!a); $("#tNota").classList.toggle("hidden", !!a);
+    $("#bArt").classList.toggle("hidden", !a);
+    if (a) {
+      $("#bSub").textContent = "El viaje del dinero de una pieza: lo que costó, en cuánto se vendió y cómo se repartió";
+      $("#bArt").innerHTML = `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><span class="soft" style="font-size:12px">${esc(a.marca || "")}</span> <b>${esc(a.nombre)}</b> ${pillEst(a.estatus)}</div>
+        <div style="display:flex;gap:8px"><a class="btn sm" href="#/a/${esc(a.id)}">Abrir ficha</a><button class="btn sm" id="bTodos">✕ Ver todo</button></div></div>`;
+      $("#bTodos").onclick = () => { st.art = null; pinta(); };
+      const mod = modeloArticulo(a);
+      dibujarSankey($("#sk"), mod, $("#si")); leyenda(mod.cols);
+      const com = (Number(a.comision_mxn) || 0) + (Number(a.envio_venta_mxn) || 0);
+      $("#bk").innerHTML = kpi("Costo total", fmt.money0(a.costo_total), `Pagado por ${esc(nombreP((a.pagado_por || "").toUpperCase()))}`)
+        + kpi("Precio de venta", a.venta_id ? fmt.money0(a.precio_venta) : "—", a.venta_id ? fmt.date(a.fecha_venta) : "Aún sin vender")
+        + kpi("Comisión + envío", a.venta_id ? fmt.money0(com) : "—", a.canal_venta || "")
+        + kpi("Ganancia", a.venta_id ? fmt.money0(a.utilidad) : "—", a.venta_id ? `Margen ${fmt.pct(a.margen)}` : "", a.venta_id ? signo(a.utilidad) : "");
+    } else {
+      $("#bSub").textContent = "Cuánto ha pagado cada quien, qué pasó con ese dinero y a dónde se fue";
+      const ultimo = st.idx === meses.length - 1;
+      const B = calcularBalance(meses[st.idx], ultimo);
+      $("#tMes").textContent = nombreMes(meses[st.idx]);
+      $("#tRange").value = st.idx;
+      $("#tPrev").disabled = st.idx === 0; $("#tNext").disabled = ultimo;
+      $("#tNota").textContent = B.sinFecha && !ultimo ? `${B.sinFecha} ventas sin fecha de venta aparecen hasta el mes actual. Captúrales la fecha para verlas en su mes.` : "";
+      const mod = modeloGlobal(B);
+      dibujarSankey($("#sk"), mod, $("#si")); leyenda(mod.cols);
+      $("#bk").innerHTML = kpi("Pagado", fmt.money0(B.totPag), "Costo + envío + impuestos")
+        + kpi("Ganancia", fmt.money0(B.totGan), `Recuperado ${fmt.money0(B.totRec)}`, signo(B.totGan))
+        + kpi("Asignado", fmt.money0(B.totDest), "Tarjetas, ahorro y otros")
+        + kpi("Disponible", fmt.money0(B.exceso ? -B.exceso : B.disponible), B.exceso ? "Se asignó más de lo recuperado" : "Recuperado sin asignar", B.exceso ? "neg" : "");
+    }
+    pintaLista();
   };
+  const pintaLista = () => {
+    const fs = buscar(S.articulos.slice().sort((x, y) => (!!y.venta_id - !!x.venta_id) || String(y.fecha_venta || y.fecha_compra || "").localeCompare(String(x.fecha_venta || x.fecha_compra || ""))), st.q, ["nombre", "marca", "id", "color"]);
+    $("#aL").innerHTML = `<button class="art-row${!st.art ? " on" : ""}" data-a=""><span><b>Todos los artículos</b><small>Vista general con línea de tiempo</small></span></button>`
+      + fs.map(a => `<button class="art-row${st.art === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><small>${esc(a.marca || "—")} · ${esc(estatusDe(a.estatus).nombre)}</small></span>
+        <em class="${a.venta_id ? signo(a.utilidad) : "mute"}">${a.venta_id ? fmt.money0(a.utilidad) : fmt.money0(a.costo_total)}</em></button>`).join("");
+    $$(".art-row", $("#aL")).forEach(b => b.onclick = () => { st.art = b.dataset.a || null; pinta(); });
+  };
+  $("#aQ").oninput = e => { st.q = e.target.value; pintaLista(); };
   const ir = i => { st.idx = Math.max(0, Math.min(meses.length - 1, i)); pinta(); };
   const parar = () => { clearInterval(vBalance.play); vBalance.play = null; $("#tPlayI").textContent = "▷"; $("#tPlayT").textContent = "Reproducir"; };
   $("#tPrev").onclick = () => { parar(); ir(st.idx - 1); };
