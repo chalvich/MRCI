@@ -150,7 +150,17 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .legend i{width:10px;height:10px;border-radius:3px}
 .sk-info{min-height:20px;font-size:13px;color:var(--text-soft);margin-top:8px}
 .bal{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;align-items:start}
+.bal>.card:first-child{grid-row:span 2}
 .bal-k{display:flex;flex-direction:column;gap:14px}
+.art-sel .seg{display:flex}.art-sel .seg button{flex:1;padding:6px 6px;font-size:12.5px;white-space:nowrap}
+/* Escritorio ancho: gráfica extendida | KPIs | listado de artículos */
+body:has(.bal) .top-row,body:has(.bal) nav.tabs,main:has(> .bal){max-width:1880px}
+@media (min-width:1200px){
+  .bal{grid-template-columns:minmax(0,1fr) 230px 300px}
+  .bal>.card:first-child{grid-row:auto}
+  .art-sel{position:sticky;top:12px}
+  .art-list{max-height:calc(100vh - 290px);max-height:calc(100dvh - 290px)}
+}
 .bal-k .kpi .v{font-size:26px}
 .art-sel{display:flex;flex-direction:column;gap:8px}
 .artsel{display:flex;flex-direction:column;gap:6px}
@@ -183,8 +193,8 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .tl-rango{flex:1;min-width:180px}
 .tl-rango input{width:100%;accent-color:var(--accent);margin:0}
 .tl-ext{display:flex;justify-content:space-between;font-size:11px;color:var(--text-mute)}
-@media (max-width:899px){.bal{grid-template-columns:minmax(0,1fr)}.bal-k{display:grid;grid-template-columns:1fr 1fr}.art-sel{grid-column:1/-1}}
-@media (max-width:640px){.bal-k{display:none}.tl-bar .mes{flex:1;min-width:0}.tl-rango{flex-basis:100%;order:5}#tPlay{order:4;flex-basis:100%}}
+@media (max-width:899px){.bal{grid-template-columns:minmax(0,1fr)}.bal>.card:first-child{grid-row:auto}.bal-k{display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.bal-k,.bal .art-sel{display:none}.tl-bar .mes{flex:1;min-width:0}.tl-rango{flex-basis:100%;order:5}#tPlay{order:4;flex-basis:100%}}
 .bd h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-mute);margin:18px 0 6px;font-weight:600}
 .bd-row{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
 .bd-row:last-child{border-bottom:0}
@@ -1964,7 +1974,7 @@ function modeloArticulos(arts) {
 }
 
 function dibujarSankey(svgCont, mod, info) {
-  const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(560, Math.max(420, W * 0.55)), TOP = 28, BW = 12, MINSLOT = (movil ? 40 : 44) + (mod.hl ? 14 : 0), GAP = 10;
+  const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(620, Math.max(420, W * 0.5)), TOP = 28, BW = 12, MINSLOT = (movil ? 40 : 44) + (mod.hl ? 14 : 0), GAP = 10;
   const cols = mod.cols;
   if (!cols.some(c => c.length)) { svgCont.innerHTML = `<div class="empty">Sin datos en este periodo</div>`; return; }
   const maxTot = Math.max(...cols.map(c => sum(c, n => n.value)), 1);
@@ -2045,11 +2055,11 @@ function vBalance(main) {
         </div>
         <div class="mute" id="tNota" style="font-size:11.5px;margin-top:8px"></div>
       </div>
-      <div class="bal-k"><div id="bk" class="bal-k" style="display:contents"></div>
-        <div class="card art-sel"><div class="sec-h" style="margin:0"><h2 style="margin:0">Por artículo</h2><span class="mute" id="aSel" style="font-size:11.5px"></span></div>
-          <input class="in" id="aQ" type="search" placeholder="Buscar artículo…" value="${esc(st.q)}">
-          <div class="art-list" id="aL"></div></div>
-      </div>
+      <div id="bk" class="bal-k"></div>
+      <div class="card art-sel"><div class="sec-h" style="margin:0"><h2 style="margin:0">Por artículo</h2><span class="mute" id="aSel" style="font-size:11.5px"></span></div>
+        <div class="seg" id="aF">${[["", "Todos"], ["v", "Vendidos"], ["i", "Sin vender"]].map(([k, l]) => `<button data-f="${k}" class="${(st.f || "") === k ? "on" : ""}">${l}</button>`).join("")}</div>
+        <input class="in" id="aQ" type="search" placeholder="Buscar artículo…" value="${esc(st.q)}">
+        <div class="art-list" id="aL"></div></div>
     </div>`;
   const leyenda = cols => $("#sl").innerHTML = unicos(cols.flat().map(n => `${n.color}|${n.label.replace(/^Venta · .*/, "Venta")}`)).map(x => { const [c, l] = x.split("|"); return `<span><i style="background:${c}"></i>${esc(l)}</span>`; }).join("");
   const kpi = (l, v, sub, cls = "") => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="s">${sub}</div></div>`;
@@ -2101,7 +2111,7 @@ function vBalance(main) {
     pintaLista();
   };
   const pintaLista = () => {
-    const fs = buscar(S.articulos.slice().sort((x, y) => (!!y.venta_id - !!x.venta_id) || String(y.fecha_venta || y.fecha_compra || "").localeCompare(String(x.fecha_venta || x.fecha_compra || ""))), st.q, ["nombre", "marca", "id", "color"]);
+    const fs = buscar(S.articulos.filter(a => !st.f || (st.f === "v") === !!a.venta_id).sort((x, y) => (!!y.venta_id - !!x.venta_id) || String(y.fecha_venta || y.fecha_compra || "").localeCompare(String(x.fecha_venta || x.fecha_compra || ""))), st.q, ["nombre", "marca", "id", "color"]);
     const sc = $("#aL").scrollTop;
     $("#aL").innerHTML = `<div class="art-row${!st.sel.length ? " on" : ""}" data-a="" role="button" tabindex="0"><span><b>Todos los artículos</b><small>Vista general con línea de tiempo</small></span></div>`
       + fs.map(a => `<div class="art-row${st.sel.includes(a.id) ? " on" : ""}" data-a="${esc(a.id)}" role="button" tabindex="0">
@@ -2123,6 +2133,7 @@ function vBalance(main) {
     $("#aSel").textContent = st.sel.length > 1 ? `${st.sel.length} seleccionados` : "Usa las casillas para elegir varios";
   };
   $("#aQ").oninput = e => { st.q = e.target.value; pintaLista(); };
+  $$("[data-f]", $("#aF")).forEach(b => b.onclick = () => { st.f = b.dataset.f; $$("[data-f]", $("#aF")).forEach(x => x.classList.toggle("on", x === b)); pintaLista(); });
   const ir = i => { st.idx = Math.max(0, Math.min(meses.length - 1, i)); pinta(); };
   const parar = () => { clearInterval(vBalance.play); vBalance.play = null; $("#tPlayI").textContent = "▷"; $("#tPlayT").textContent = "Reproducir"; };
   $("#tPrev").onclick = () => { parar(); ir(st.idx - 1); };
