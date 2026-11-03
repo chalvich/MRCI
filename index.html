@@ -438,10 +438,16 @@ const COLORES = [["Negro", "#111111"], ["Blanco", "#f5f5f5"], ["Gris", "#8a8f98"
   ["Amarillo", "#f2c94c"], ["Naranja", "#ef7d32"], ["Multicolor", "conic-gradient(#e53935,#fbc02d,#43a047,#1e88e5,#8e24aa,#e53935)"]];
 const colorDe = nombre => COLORES.find(([n]) => norm(n) === norm(nombre));
 const puntoColor = nombre => { const c = colorDe(nombre); return nombre ? `<span class="dot-c" style="background:${c ? c[1] : "transparent"}"></span>${esc(c ? c[0] : nombre)}` : "—"; };
-const CATEGORIAS = ["Tacones", "Zapatos", "Tennis", "Bolsa", "Otros"];
+/* Categorías: vienen del catálogo (tabla categorias); si aún no existe, se usa esta lista */
+const CATEGORIAS_BASE = [["Tacones", "calzado"], ["Zapatos", "calzado"], ["Tennis", "calzado"], ["Bolsa", "bolsa"], ["Joyería", "joyeria"], ["Otros", "ropa"]];
+const TIPOS_TALLA = [["calzado", "Calzado · 30 a 37"], ["bolsa", "Bolsa · Mini a Grande"], ["joyeria", "Joyería · Única / anillo 4–10"], ["ropa", "Ropa · XS a XL"], ["ninguna", "Sin talla"]];
+const categorias = () => S.categorias?.length ? S.categorias.map(c => [c.nombre, c.tipo_talla]) : CATEGORIAS_BASE;
 function tallasPara(cat) {
-  if (["Tacones", "Zapatos", "Tennis"].includes(cat)) { const t = []; for (let n = 30; n <= 37; n += 0.5) t.push(String(n)); return t; }
-  if (cat === "Bolsa") return ["Mini", "Chica", "Mediana", "Grande", "Única"];
+  const tipo = categorias().find(([n]) => n === cat)?.[1] || "ropa";
+  if (tipo === "calzado") { const t = []; for (let n = 30; n <= 37; n += 0.5) t.push(String(n)); return t; }
+  if (tipo === "bolsa") return ["Mini", "Chica", "Mediana", "Grande", "Única"];
+  if (tipo === "joyeria") return ["Única", "Anillo 4", "Anillo 5", "Anillo 6", "Anillo 7", "Anillo 8", "Anillo 9", "Anillo 10"];
+  if (tipo === "ninguna") return [];
   return ["XS", "S", "M", "L", "XL", "Única"];
 }
 const ICON_PAQ = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>`;
@@ -535,10 +541,12 @@ async function cargarTodo() {
     fetchAll("cargos_tc", "fecha", false), fetchAll("ventas", "fecha_venta", false),
     fetchAll("usuarios_permitidos", "email"),
   ]);
-  const [fotos, movs] = await Promise.all([
+  const [fotos, movs, cats] = await Promise.all([
     fetchAll("fotos", "id").catch(() => []),
     fetchAll("movimientos", "fecha", false).then(r => { S.sinMovs = false; return r; }).catch(e => { console.warn("movimientos:", e); S.sinMovs = true; return []; }),
+    fetchAll("categorias", "orden").then(r => { S.sinCats = false; return r; }).catch(() => { S.sinCats = true; return []; }),
   ]);
+  S.categorias = cats.sort((x, y) => (x.orden - y.orden) || x.nombre.localeCompare(y.nombre, "es"));
   const fotosPor = new Map();
   fotos.slice().sort((x, y) => (y.es_portada - x.es_portada) || (x.id - y.id)).forEach(f => { if (!fotosPor.has(f.articulo_id)) fotosPor.set(f.articulo_id, []); fotosPor.get(f.articulo_id).push(f.ruta); });
   Object.assign(S, { estatus, marcas, canales, paquetes, articulos, cargos, ventas, usuarios, fotos, fotosPor, movs });
@@ -612,7 +620,7 @@ const MOD = {
       F("nombre", "Nombre", "text", { req: 1, full: 1 }),
       F("marca_id", "Marca", "select", { src: "marcas", nueva: "marca" }),
       F("estatus", "Estatus", "select", { src: "estatus", req: 1, def: "COMPRADO" }),
-      F("categoria", "Categoría", "select", { opts: () => CATEGORIAS.map(c => [c, c]) }),
+      F("categoria", "Categoría", "select", { opts: () => categorias().map(([c]) => [c, c]), hint: "Se agregan o renombran en Catálogos" }),
       F("talla", "Talla", "select", { opts: b => tallasPara(b?.categoria).map(t => [t, t]), dep: "categoria" }),
       F("color", "Color", "color", { full: 1 }),
       F("condicion", "Condición", "list", { opts: () => ["Nuevo", "Como nuevo", "Buen estado", "Con detalles"] }),
@@ -793,6 +801,10 @@ const MOD = {
   canales: { tabla: "canales", pk: "nombre", titulo: "canal de venta", campos: [
     F("nombre", "Nombre", "text", { req: 1 }), F("comision_pct", "Comisión %", "number", { def: 0, cero: 1 }),
     F("comision_fija", "Comisión fija (MXN)", "money", { def: 0, cero: 1 }), F("notas", "Notas", "textarea", { full: 1 })] },
+  categorias: { tabla: "categorias", pk: "nombre", titulo: "categoría", campos: [
+    F("nombre", "Nombre", "text", { req: 1, hint: "Si la renombras, sus artículos se actualizan solos" }),
+    F("tipo_talla", "Tallas que ofrece", "select", { req: 1, opts: () => TIPOS_TALLA, def: "ropa" }),
+    F("orden", "Orden en la lista", "number", { def: 50, cero: 1, hint: "Menor = más arriba" })] },
   estatus: { tabla: "estatus", pk: "clave",  titulo: "estatus", campos: [
     F("clave", "Clave (MAYÚSCULAS)", "text", { req: 1 }), F("nombre", "Nombre", "text", { req: 1 }),
     F("orden", "Orden en el flujo", "number", { req: 1, hint: "Vendido = 70; antes de vender < 70" }),
@@ -1594,7 +1606,7 @@ function lightbox(urls, i) {
 
 /* ---------- línea de historial legible ---------- */
 const ETIQ = Object.fromEntries(Object.values(MOD).flatMap(M => M.campos.filter(c => c.k).map(c => [c.k, c.l])));
-const TABLA_NOM = { articulos: "Artículo", ventas: "Venta", cargos_tc: "Cargo TC", fotos: "Foto", paquetes: "Paquete", movimientos: "Movimiento" };
+const TABLA_NOM = { articulos: "Artículo", ventas: "Venta", cargos_tc: "Cargo TC", fotos: "Foto", paquetes: "Paquete", movimientos: "Movimiento", categorias: "Categoría" };
 function valHist(k, v) {
   if (v === null || v === undefined || v === "") return "vacío";
   if (k === "estatus") return estatusDe(v).nombre;
@@ -1619,7 +1631,7 @@ function lineaHist(r, enFicha = false) {
       det = ks.map(k => `${esc(ETIQ[k] || k)}: ${esc(valHist(k, c[k].de))} → ${esc(valHist(k, c[k].a))}`).join("<br>");
     }
   } else if (r.accion === "ALTA") {
-    titulo = { articulos: "Artículo creado", ventas: `Venta registrada · ${fmt.money(c.precio_venta)}${c.canal ? " en " + esc(c.canal) : ""}`, cargos_tc: `Cargo TC (${esc(c.concepto || "")}) · ${fmt.money(c.monto_mxn)}`, fotos: "Foto agregada", paquetes: `Paquete ${esc(c.numero || "")} creado`, movimientos: `Movimiento · ${esc(c.destino || "")} · ${fmt.money(c.monto_mxn)}` }[r.tabla] || "Alta";
+    titulo = { articulos: "Artículo creado", ventas: `Venta registrada · ${fmt.money(c.precio_venta)}${c.canal ? " en " + esc(c.canal) : ""}`, cargos_tc: `Cargo TC (${esc(c.concepto || "")}) · ${fmt.money(c.monto_mxn)}`, fotos: "Foto agregada", paquetes: `Paquete ${esc(c.numero || "")} creado`, movimientos: `Movimiento · ${esc(c.destino || "")} · ${fmt.money(c.monto_mxn)}`, categorias: `Categoría ${esc(c.nombre || "")} creada` }[r.tabla] || "Alta";
     if (r.tabla === "articulos" && c.notas && /Migrado/.test(c.notas)) det = "Migrado desde el Excel";
   } else {
     titulo = `${TABLA_NOM[r.tabla] || r.tabla} eliminado`;
@@ -2273,6 +2285,8 @@ function vAjustes(main) {
   <div class="grid two">
     <div class="card"><div class="sec-h"><h2>Marcas</h2><button class="btn sm" data-n="marcas">+ Marca</button></div><div id="tm"></div></div>
     <div class="card"><div class="sec-h"><h2>Canales de venta</h2><button class="btn sm" data-n="canales">+ Canal</button></div><div id="tc"></div></div>
+    <div class="card"><div class="sec-h"><h2>Categorías</h2><button class="btn sm" data-n="categorias"${S.sinCats ? " disabled" : ""}>+ Categoría</button></div><div id="tcat"></div>
+      ${S.sinCats ? `<p class="mute" style="font-size:12px">Corre <b>sql/08_categorias.sql</b> en Supabase para poder editarlas.</p>` : ""}</div>
     <div class="card"><div class="sec-h"><h2>Estatus (flujo)</h2><button class="btn sm" data-n="estatus">+ Estatus</button></div><div id="te"></div></div>
     <div class="card"><h2>Usuarios con acceso</h2>${S.usuarios.map(u => `<div style="padding:4px 0">${esc(u.nombre || "")} <span class="mute">${esc(u.email)}</span></div>`).join("")}
       <p class="mute" style="font-size:12px">Para agregar a alguien: Supabase → Table Editor → <b>usuarios_permitidos</b> → Insert row.</p></div>
@@ -2283,6 +2297,9 @@ function vAjustes(main) {
   </div>`;
   tabla($("#tm"), { filas: S.marcas.map(m => ({ ...m, n: S.articulos.filter(a => a.marca_id === m.id).length })), clave: "cm", alClick: m => abrirForm("marcas", { id: m.id, nombre: m.nombre }), cols: [{ k: "nombre", l: "Marca" }, { k: "n", l: "Artículos", r: 1 }] });
   tabla($("#tc"), { filas: S.canales, clave: "cc", alClick: c => abrirForm("canales", c), cols: [{ k: "nombre", l: "Canal" }, { k: "comision_pct", l: "%", r: 1 }, { k: "comision_fija", l: "Fija", r: 1, f: fmt.money }] });
+  tabla($("#tcat"), { filas: categorias().map(([nombre, tipo]) => ({ ...(S.categorias.find(c => c.nombre === nombre) || {}), nombre, tipo_talla: tipo, n: S.articulos.filter(a => a.categoria === nombre).length })), clave: "ccat",
+    alClick: c => S.sinCats ? toast("Primero corre sql/08_categorias.sql", true) : abrirForm("categorias", { nombre: c.nombre, tipo_talla: c.tipo_talla, orden: c.orden }),
+    cols: [{ k: "nombre", l: "Categoría" }, { k: "tipo_talla", l: "Tallas", h: r => esc((TIPOS_TALLA.find(([k]) => k === r.tipo_talla) || [, r.tipo_talla])[1].split(" · ")[0]) }, { k: "n", l: "Artículos", r: 1 }] });
   tabla($("#te"), { filas: S.estatus, clave: "ce", alClick: e => abrirForm("estatus", e), cols: [{ k: "orden", l: "#", r: 1 }, { k: "nombre", l: "Estatus", h: r => pillEst(r.clave) }, { k: "clave", l: "Clave" }] });
   $$("[data-n]", main).forEach(b => b.onclick = () => abrirForm(b.dataset.n));
   $("#lote").onchange = async e => {
