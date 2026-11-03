@@ -142,6 +142,8 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .sankey text{font-family:var(--sans);paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
 .sankey .lbl{fill:var(--text-soft);font-size:12px}
 .sankey .amt{fill:var(--text);font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
+.sankey .amt.big{font-size:16px;font-weight:700}
+.sankey .tot{fill:var(--text-mute);font-size:11px;font-variant-numeric:tabular-nums}
 .sankey .hdr{fill:var(--text-mute);font-size:11px;letter-spacing:.08em;text-transform:uppercase;stroke-width:0}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--text-soft);margin-top:10px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -168,6 +170,9 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .art-row span{min-width:0;display:flex;flex-direction:column}
 .art-row b{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .art-row small{font-size:11.5px;color:var(--text-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-chk{display:flex;align-items:center;padding:4px;margin:-4px 0 -4px -2px;flex:none}
+.art-chk input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.art-row span{flex:1}
 .art-row em{font-style:normal;font-size:12.5px;font-weight:650;font-variant-numeric:tabular-nums;flex:none}
 .tl-bar{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
 .tl-bar .mes{min-width:150px;text-align:center;font-weight:650;line-height:1.25}
@@ -1333,7 +1338,8 @@ async function vFicha(main, id) {
         ${venta.guia || venta.paqueteria ? `<dt>Envío</dt><dd>${esc([venta.paqueteria, venta.guia].filter(Boolean).join(" "))}</dd>` : ""}
         <dt>Depósito</dt><dd>${venta.fecha_deposito ? `${fmt.date(venta.fecha_deposito)} · ${fmt.money(venta.monto_depositado)}` : '<span class="warn">Pendiente</span>'}</dd>
         ${textoReparto(repartoMovs().get(a.id)) ? `<dt>Dinero fue a</dt><dd>${textoReparto(repartoMovs().get(a.id))}</dd>` : ""}
-      </dl><div class="total"><span>Utilidad</span><span class="num ${signo(a.utilidad)}">${fmt.money(a.utilidad)} · ${fmt.pct(a.margen)}</span></div>`
+      </dl><div class="total"><span>Utilidad</span><span class="num ${signo(a.utilidad)}">${fmt.money(a.utilidad)} · ${fmt.pct(a.margen)}</span></div>
+      ${!S.sinMovs ? `<button class="btn sm" id="aMov" style="margin-top:12px;width:100%">➜ Registrar a dónde se fue el dinero</button>` : ""}`
       : `<div class="mute">Aún sin vender.</div>
          ${a.precio_objetivo ? `<dl class="kv" style="margin-top:8px"><dt>Precio objetivo</dt><dd>${fmt.money(a.precio_objetivo)}</dd></dl>` : ""}
          <button class="btn sm" data-cot style="margin-top:10px">💲 Simular precio de venta</button>`}</div>
@@ -1371,6 +1377,12 @@ async function vFicha(main, id) {
     if (mostrar) cotizador($("#pCot"), a, venta);
   };
   $("#cotizar").onclick = () => verCot($("#pCot").classList.contains("hidden"));
+  $("#aMov") && ($("#aMov").onclick = () => abrirForm("movimientos", null, {
+    fecha: venta?.fecha_deposito || new Date().toISOString().slice(0, 10),
+    monto_mxn: venta?.monto_depositado || Math.round((Number(a.ingreso_neto) || 0) * 100) / 100,
+    destino: `Pago tarjeta ${nombreP((a.pagado_por || "").toUpperCase())}`,
+    articulos: [a.id],
+  }, () => render()));
   $("[data-cot]") && ($("[data-cot]").onclick = () => { verCot(true); scrollTo(0, 0); });
   $("#evta") && ($("#evta").onclick = () => abrirForm("ventas", venta, {}, () => render()));
   $("#epaq") && ($("#epaq").onclick = () => abrirForm("paquetes", paq, {}, () => render()));
@@ -1711,20 +1723,15 @@ const textoReparto = rep => Object.keys(rep || {}).length ? destinosLista().filt
 
 /* Modelo global: Pagado (CG/Chava) → Resultado (inventario · costo recuperado · ganancia) → Destino (movimientos)
    Las tarjetas se pagan primero con el costo recuperado; ahorro y otros salen primero de la ganancia. */
-function modeloGlobal(B, sel = null) {
-  // Parte del artículo seleccionado ("en el total")
-  let it = null, hlInfo = "";
-  if (sel) {
-    const vend = !!(sel.venta_id && B.ok(sel.fecha_venta)), incl = B.ok(sel.fecha_compra) || vend;
-    const g = pagadores().includes((sel.pagado_por || "").toUpperCase()) ? (sel.pagado_por || "").toUpperCase() : "";
-    const quien = nombreP(g), costo = Number(sel.costo_total) || 0;
-    if (incl) {
-      it = { g, costo, vend, gan: vend ? Math.max(0, Number(sel.utilidad) || 0) : 0 };
-      hlInfo = vend
-        ? `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(costo)}; al venderse regresaron ${fmt.money(costo)} a "Costo recuperado" y dejó ${fmt.money(it.gan)} de ganancia. Para seguirlo hasta tarjeta o ahorro hay que amarrarlo a un movimiento.`
-        : `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(costo)} y sigue en inventario (sin vender).`;
-    } else hlInfo = `<b>${esc(sel.nombre)}</b> todavía no se compraba en este mes. Avanza la línea de tiempo.`;
-  }
+function modeloGlobal(B, sels = []) {
+  // Piezas seleccionadas ("en el total"): su parte se dibuja primero en cada banda para resaltarla
+  const pers = pagadores();
+  const gDe = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
+  const its = sels.map(a => {
+    const vend = !!(a.venta_id && B.ok(a.fecha_venta)), incl = B.ok(a.fecha_compra) || vend;
+    return incl ? { a, g: gDe(a), costo: Number(a.costo_total) || 0, vend, gan: vend ? Math.max(0, Number(a.utilidad) || 0) : 0 } : null;
+  }).filter(Boolean);
+  const porG = g => its.filter(x => x.g === g);
   const P = B.grupos.map(g => ({ id: "p:" + g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: B.pagado[g],
     info: `<b>${esc(nombreP(g))}</b> ha pagado <b>${fmt.money(B.pagado[g])}</b> en ${B.nArt[g]} artículos (costo + envío + impuestos) · ${B.nVend[g]} ya vendidos.` }));
   const ganTot = Math.max(0, B.totGan);
@@ -1733,17 +1740,16 @@ function modeloGlobal(B, sel = null) {
   const nGan = { id: "m:gan", label: "Ganancia", color: C_GAN, value: ganTot, info: `<b>${fmt.money(B.totGan)}</b> de ganancia limpia en ${sum(B.grupos, g => B.nVend[g])} ventas (ya sin comisiones ni envíos).` };
   const M = [nInv, nCos, nGan].filter(n => n.value > 0.5);
   const links = [];
-  // el pedazo del artículo seleccionado va primero (arriba) en cada banda para poder resaltarlo
   const par = (s, t, total, parte, fan) => {
     if (parte > 0.5) links.push({ s, t, v0: fan ? 0 : parte, v1: parte, hl: true });
     const resto = total - (parte || 0);
     if (resto > 0.5) links.push({ s, t, v0: fan ? 0 : resto, v1: resto });
   };
   B.grupos.forEach(g => {
-    const p = P.find(x => x.id === "p:" + g), mio = it && it.g === g;
-    par(p, nInv, B.costoInv[g], mio && !it.vend ? it.costo : 0, false);
-    par(p, nCos, B.costoVend[g], mio && it.vend ? it.costo : 0, false);
-    if (ganTot > 0) par(p, nGan, Math.max(0, B.gan[g]), mio && it.vend ? it.gan : 0, true);
+    const p = P.find(x => x.id === "p:" + g), mis = porG(g);
+    par(p, nInv, B.costoInv[g], sum(mis.filter(x => !x.vend), x => x.costo), false);
+    par(p, nCos, B.costoVend[g], sum(mis.filter(x => x.vend), x => x.costo), false);
+    if (ganTot > 0) par(p, nGan, Math.max(0, B.gan[g]), sum(mis, x => x.gan), true);
   });
   // reparto de lo recuperado hacia los destinos
   let poolC = B.totCostoVend, poolG = ganTot;
@@ -1765,68 +1771,121 @@ function modeloGlobal(B, sel = null) {
     if (poolC > 0.5) dl.push({ s: nCos, t: n, x: poolC });
     if (poolG > 0.5) dl.push({ s: nGan, t: n, x: poolG });
   }
-  // parte de la pieza seleccionada hacia los destinos (según los movimientos amarrados a ella)
-  const parteItem = {};
-  if (it && it.vend) {
-    const rp = repartoMovs(B.ok).get(sel.id) || {};
-    const A = asignarPieza(it.costo, it.gan, destinosLista().filter(d => rp[d] > 0.5).map(d => [d, rp[d]]));
-    A.out.forEach(o => { if (o.c > 0.5) parteItem[`m:cos|d:${o.d}`] = o.c; if (o.g > 0.5) parteItem[`m:gan|d:${o.d}`] = o.g; });
-    if (A.restoC > 0.5) parteItem["m:cos|d:disp"] = A.restoC;
-    if (A.restoG > 0.5) parteItem["m:gan|d:disp"] = A.restoG;
-    const quien = nombreP(it.g), txt = textoReparto(rp), resto = A.restoC + A.restoG;
-    hlInfo = `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(it.costo)} y dejó ${fmt.money(it.gan)} de ganancia. `
-      + (txt ? `Su dinero fue a: ${txt}${resto > 0.5 ? ` · ${fmt.money0(resto)} sigue disponible` : ""}.` : `Aún no está amarrada a ningún movimiento: todo su dinero cuenta como disponible.`);
-  }
-  dl.forEach(l => {
-    const hp = Math.min(parteItem[`${l.s.id}|${l.t.id}`] || 0, l.x), r = l.x - hp;
-    if (hp > 0.5) links.push({ s: l.s, t: l.t, v0: l.fan ? 0 : hp, v1: hp, hl: true });
-    if (r > 0.5) links.push({ s: l.s, t: l.t, v0: l.fan ? 0 : r, v1: r });
+  // parte de las piezas seleccionadas hacia los destinos (según los movimientos amarrados)
+  const parteItem = {}, suma = (k, v) => { if (v > 0.005) parteItem[k] = (parteItem[k] || 0) + v; };
+  const rpAll = repartoMovs(B.ok), destItems = {};
+  let restoItems = 0, restoGItems = 0;
+  its.filter(x => x.vend).forEach(x => {
+    const rp = rpAll.get(x.a.id) || {};
+    const A = asignarPieza(x.costo, x.gan, destinosLista().filter(d => rp[d] > 0.5).map(d => [d, rp[d]]));
+    A.out.forEach(o => { suma(`m:cos|d:${o.d}`, o.c); suma(`m:gan|d:${o.d}`, o.g); destItems[o.d] = (destItems[o.d] || 0) + o.c + o.g; });
+    suma("m:cos|d:disp", A.restoC); suma("m:gan|d:disp", A.restoG);
+    restoItems += A.restoC + A.restoG; restoGItems += A.restoG;
   });
-  return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links, hl: !!sel, hlInfo };
+  // Si la pieza usó una ruta que el total no tiene (ej. su ganancia pagó tarjeta), se intercambia
+  // ese monto entre bandas del mismo nodo para que todo cuadre sin cambiar los totales.
+  const G = {}, fanK = new Set(), key = (a, b) => `${a.id}|${b.id}`;
+  dl.forEach(l => { G[key(l.s, l.t)] = (G[key(l.s, l.t)] || 0) + l.x; if (l.fan) fanK.add(key(l.s, l.t)); });
+  const I = k => parteItem[k] || 0, g = k => G[k] || 0;
+  [[nCos, nGan], [nGan, nCos]].forEach(([src, otro]) => D.forEach(d => {
+    let falta = I(key(src, d)) - g(key(src, d));
+    D.forEach(e => {
+      if (falta <= 0.5 || e === d) return;
+      const x = Math.min(falta, g(key(src, e)) - I(key(src, e)), g(key(otro, d)) - I(key(otro, d)));
+      if (x <= 0.5) return;
+      G[key(src, d)] = g(key(src, d)) + x; G[key(otro, d)] = g(key(otro, d)) - x;
+      G[key(src, e)] = g(key(src, e)) - x; G[key(otro, e)] = g(key(otro, e)) + x;
+      falta -= x;
+    });
+  }));
+  D.forEach(d => [nCos, nGan].forEach(src => {
+    const k = key(src, d), x = g(k), fan = fanK.has(k);
+    const hp = Math.min(I(k), x), r = x - hp;
+    if (hp > 0.5) links.push({ s: src, t: d, v0: fan ? 0 : hp, v1: hp, hl: true });
+    if (r > 0.5) links.push({ s: src, t: d, v0: fan ? 0 : r, v1: r });
+  }));
+  // texto resumen de la selección
+  let hlInfo = "";
+  if (sels.length) {
+    if (!its.length) hlInfo = `${sels.length > 1 ? "Estas piezas" : `<b>${esc(sels[0].nombre)}</b>`} todavía no se compraba${sels.length > 1 ? "n" : ""} en este mes. Avanza la línea de tiempo.`;
+    else {
+      const titulo = its.length === 1 ? `<b>${esc(its[0].a.nombre)}</b>` : `<b>${its.length} artículos</b>`;
+      const pag = sum(its, x => x.costo), gan = sum(its, x => x.gan), nv = its.filter(x => x.vend).length;
+      const quien = unicos(its.map(x => nombreP(x.g))).join(" y ");
+      const destTxt = destinosLista().filter(d => destItems[d] > 0.5).map(d => `${esc(d)} ${fmt.money0(destItems[d])}`).join(" · ");
+      hlInfo = `${titulo}: ${esc(quien)} pagó ${fmt.money(pag)}${nv ? ` · ganancia ${fmt.money(gan)}` : ""}${nv < its.length ? ` · ${its.length - nv} sin vender` : ""}. `
+        + (nv ? (destTxt ? `El dinero fue a: ${destTxt}${restoItems > 0.5 ? ` · ${fmt.money0(restoItems)} sigue disponible` : ""}.` : `Aún sin amarrar a movimientos: ${fmt.money0(restoItems)} cuentan como disponible (${fmt.money0(restoItems - restoGItems)} de costo + ${fmt.money0(restoGItems)} de ganancia).`) : "");
+    }
+  }
+  return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links, hl: sels.length > 0, hlInfo };
 }
 
-/* Modelo por artículo: Costo → Venta → Reparto */
-function modeloArticulo(a) {
-  const pag = (a.pagado_por || "").toUpperCase(), quien = nombreP(pag), cP = pag ? colorPersona(pag) : VIZ_GRIS;
-  const comp = [["Artículo", Number(a.pago_mxn) || 0, C_AHO], ["Envío internacional", Number(a.envio_mxn_efectivo) || 0, C_INV],
-    ["Impuestos", Number(a.impuestos_mxn) || 0, C_COSTO], ["Otros costos", Number(a.otros_costos_mxn) || 0, C_OTROS]]
-    .filter(c => c[1] > 0.5).map(([l, v, c]) => ({ id: "c:" + l, label: l, color: c, value: v, info: `<b>${l}</b>: ${fmt.money(v)}${l === "Artículo" ? ` · pagado por ${esc(quien)}` : ""}.` }));
-  const costo = Number(a.costo_total) || 0, links = [];
-  const pagador = { id: "q:" + pag, label: quien, color: cP, value: costo, info: `<b>${esc(quien)}</b> pagó ${fmt.money(costo)} por esta pieza (artículo + envío + impuestos).` };
-  comp.forEach(c => links.push({ s: pagador, t: c, v0: c.value, v1: c.value }));
-  const P0 = costo ? [pagador] : [];
-  if (!a.venta_id) {
-    const n = { id: "m:inv", label: "Sin vender", color: C_INV, value: costo, info: `Aún sin vender. Usa <b>💲 Cotización</b> en la ficha para simular su precio.` };
-    comp.forEach(c => links.push({ s: c, t: n, v0: c.value, v1: c.value }));
-    return { headers: ["Pagó", "Costo", "Estado"], cols: [P0, comp, costo ? [n] : []], links };
-  }
-  const precio = Number(a.precio_venta) || 0, com = Number(a.comision_mxn) || 0, env = Number(a.envio_venta_mxn) || 0;
-  const neto = precio - com - env, repone = Math.max(0, Math.min(costo, neto)), ganancia = Math.max(0, neto - costo), perdida = Math.max(0, costo - neto);
-  const venta = { id: "v", label: `Venta${a.canal_venta ? " · " + a.canal_venta : ""}`, color: C_VENTA, value: precio, info: `Se vendió en <b>${fmt.money(precio)}</b>${a.fecha_venta ? " el " + fmt.date(a.fecha_venta) : ""}${a.canal_venta ? " por " + esc(a.canal_venta) : ""}.` };
-  comp.forEach(c => links.push({ s: c, t: venta, v0: c.value, v1: costo ? c.value * precio / costo : 0 }));
-  const R = [["Comisión", com, C_OTROS, `Comisión de la plataforma: ${fmt.money(com)}.`], ["Envío local", env, C_INV, `Envío al cliente: ${fmt.money(env)}.`],
-    [`Repone tarjeta ${quien}`, repone, cP, `<b>${fmt.money(repone)}</b> regresan para cubrir lo que pagó ${esc(quien)}${perdida ? ` (faltaron ${fmt.money(perdida)}: hubo pérdida)` : ""}.`],
-    ["Ganancia", ganancia, C_GAN, `<b>${fmt.money(ganancia)}</b> de ganancia · margen ${fmt.pct(a.margen)}.`]]
-    .filter(r => r[1] > 0.5).map(([l, v, c, inf]) => ({ id: "r:" + l, label: l, color: c, value: v, info: inf }));
-  R.forEach(r => links.push({ s: venta, t: r, v0: r.value, v1: r.value }));
-  const rp = repartoMovs().get(a.id);
-  if (!rp) return { headers: ["Pagó", "Costo", "Venta", "Reparto"], cols: [P0, comp, precio ? [venta] : [], R], links };
-  // Amarrada a movimientos: se sigue hasta su destino final
-  const A = asignarPieza(repone, ganancia, destinosLista().filter(d => rp[d] > 0.5).map(d => [d, rp[d]]));
-  const nRep = R.find(r => r.id.startsWith("r:Repone")), nGan = R.find(r => r.id === "r:Ganancia");
-  const D = A.out.map(o => ({ id: "d:" + o.d, label: o.d, color: colorDestino(o.d), value: o.c + o.g, info: `<b>${fmt.money(o.c + o.g)}</b> de esta venta se fueron a <b>${esc(o.d)}</b> (reparto automático del movimiento).`, o }));
-  D.forEach(n => { if (n.o.c > 0.5 && nRep) links.push({ s: nRep, t: n, v0: n.o.c, v1: n.o.c }); if (n.o.g > 0.5 && nGan) links.push({ s: nGan, t: n, v0: n.o.g, v1: n.o.g }); });
-  if (A.restoC + A.restoG > 0.5) {
-    const n = { id: "d:disp", label: "Sin asignar", color: VIZ_GRIS, value: A.restoC + A.restoG, info: `<b>${fmt.money(A.restoC + A.restoG)}</b> de esta venta todavía no se asignan a ningún movimiento.` };
-    D.push(n);
-    if (A.restoC > 0.5 && nRep) links.push({ s: nRep, t: n, v0: A.restoC, v1: A.restoC });
-    if (A.restoG > 0.5 && nGan) links.push({ s: nGan, t: n, v0: A.restoG, v1: A.restoG });
-  }
-  return { headers: ["Pagó", "Costo", "Venta", "Reparto", "Destino"], cols: [P0, comp, precio ? [venta] : [], R, D], links };
+/* Modelo por artículo(s): Pagó → Costo → Venta → Reparto → (Destino, si está amarrado a movimientos) */
+function modeloArticulos(arts) {
+  const pers = pagadores(), uno = arts.length === 1;
+  const gDe = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
+  const links = [], link = (s, t, v0, v1) => { if (v0 > 0.005 || v1 > 0.005) links.push({ s, t, v0, v1 }); };
+  const COMP = [["Artículo", a => Number(a.pago_mxn) || 0, C_AHO], ["Envío internacional", a => Number(a.envio_mxn_efectivo) || 0, C_INV],
+    ["Impuestos", a => Number(a.impuestos_mxn) || 0, C_COSTO], ["Otros costos", a => Number(a.otros_costos_mxn) || 0, C_OTROS]];
+  const costoDe = a => Number(a.costo_total) || 0;
+  // 1. quién pagó
+  const grupos = unicos(arts.map(gDe).map(g => g || "·")).map(g => g === "·" ? "" : g);
+  const P0 = grupos.map(g => { const mis = arts.filter(a => gDe(a) === g), v = sum(mis, costoDe);
+    return { id: "q:" + g, g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: v, info: `<b>${esc(nombreP(g))}</b> pagó ${fmt.money(v)}${uno ? " por esta pieza" : ` por ${mis.length} piezas`} (artículo + envío + impuestos).` }; }).filter(n => n.value > 0.5);
+  // 2. componentes del costo
+  const C1 = COMP.map(([l, f, c]) => { const v = sum(arts, f); return { id: "c:" + l, label: l, color: c, value: v, f, info: `<b>${l}</b>: ${fmt.money(v)}.` }; }).filter(n => n.value > 0.5);
+  P0.forEach(p => C1.forEach(c => { const v = sum(arts.filter(a => gDe(a) === p.g), c.f); link(p, c, v, v); }));
+  // 3. venta / sin vender
+  const vend = arts.filter(a => a.venta_id), sinV = arts.filter(a => !a.venta_id);
+  const precio = sum(vend, a => Number(a.precio_venta) || 0);
+  const nV = { id: "v", label: uno ? `Venta${vend[0]?.canal_venta ? " · " + vend[0].canal_venta : ""}` : `Ventas (${vend.length})`, color: C_VENTA, value: precio,
+    info: uno && vend[0] ? `Se vendió en <b>${fmt.money(precio)}</b>${vend[0].fecha_venta ? " el " + fmt.date(vend[0].fecha_venta) : ""}${vend[0].canal_venta ? " por " + esc(vend[0].canal_venta) : ""}.` : `${vend.length} ventas por <b>${fmt.money(precio)}</b>.` };
+  const nS = { id: "s", label: "Sin vender", color: C_INV, value: sum(sinV, costoDe), info: uno ? `Aún sin vender. Usa <b>💲 Cotización</b> en la ficha para simular su precio.` : `${sinV.length} piezas sin vender (${fmt.money(sum(sinV, costoDe))} de costo).` };
+  C1.forEach(c => {
+    const cv = sum(vend, c.f), cs = sum(sinV, c.f);
+    link(c, nV, cv, sum(vend, a => costoDe(a) ? c.f(a) * (Number(a.precio_venta) || 0) / costoDe(a) : 0));
+    link(c, nS, cs, cs);
+  });
+  const C2 = [nV, nS].filter(n => n.value > 0.5);
+  if (!vend.length) return { headers: ["Pagó", "Costo", "Estado"], cols: [P0, C1, C2], links };
+  // 4. reparto de la venta
+  const datos = vend.map(a => {
+    const pr = Number(a.precio_venta) || 0, com = Number(a.comision_mxn) || 0, env = Number(a.envio_venta_mxn) || 0, neto = pr - com - env, c = costoDe(a);
+    return { a, g: gDe(a), com, env, repone: Math.max(0, Math.min(c, neto)), gan: Math.max(0, neto - c), perd: Math.max(0, c - neto) };
+  });
+  const perd = sum(datos, d => d.perd);
+  const R = [
+    { id: "r:com", label: "Comisión", color: C_OTROS, value: sum(datos, d => d.com), info: `Comisiones de la plataforma: ${fmt.money(sum(datos, d => d.com))}.` },
+    { id: "r:env", label: "Envío local", color: C_INV, value: sum(datos, d => d.env), info: `Envíos al cliente: ${fmt.money(sum(datos, d => d.env))}.` },
+    ...unicos(datos.map(d => d.g || "·")).map(g => g === "·" ? "" : g).map(g => { const v = sum(datos.filter(d => d.g === g), d => d.repone);
+      return { id: "r:rep:" + g, g, label: `Repone tarjeta ${nombreP(g)}`, color: g ? colorPersona(g) : VIZ_GRIS, value: v, info: `<b>${fmt.money(v)}</b> regresan para cubrir lo que pagó ${esc(nombreP(g))}${perd ? ` (faltaron ${fmt.money(perd)}: hubo pérdida)` : ""}.` }; }),
+    { id: "r:gan", label: "Ganancia", color: C_GAN, value: sum(datos, d => d.gan), info: `<b>${fmt.money(sum(datos, d => d.gan))}</b> de ganancia${uno ? ` · margen ${fmt.pct(vend[0].margen)}` : ""}.` },
+  ].filter(n => n.value > 0.5);
+  R.forEach(r => link(nV, r, r.value, r.value));
+  // 5. destino (movimientos amarrados)
+  const rpAll = repartoMovs();
+  if (!vend.some(a => rpAll.get(a.id))) return { headers: ["Pagó", "Costo", "Venta", "Reparto"], cols: [P0, C1, C2, R], links };
+  const nGan = R.find(r => r.id === "r:gan"), D = {}, flujos = [];
+  let restoC = {}, restoG = 0;
+  datos.forEach(d => {
+    const rp = rpAll.get(d.a.id) || {};
+    const A = asignarPieza(d.repone, d.gan, destinosLista().filter(x => rp[x] > 0.5).map(x => [x, rp[x]]));
+    A.out.forEach(o => { D[o.d] = (D[o.d] || 0) + o.c + o.g; flujos.push({ g: d.g, d: o.d, c: o.c, gg: o.g }); });
+    restoC[d.g] = (restoC[d.g] || 0) + A.restoC; restoG += A.restoG;
+  });
+  const DN = destinosLista().filter(d => D[d] > 0.5).map(d => ({ id: "d:" + d, label: d, color: colorDestino(d), value: D[d], info: `<b>${fmt.money(D[d])}</b> se fueron a <b>${esc(d)}</b> (reparto automático de los movimientos).` }));
+  const restoTot = sum(Object.values(restoC), x => x) + restoG;
+  if (restoTot > 0.5) DN.push({ id: "d:disp", label: "Sin asignar", color: VIZ_GRIS, value: restoTot, info: `<b>${fmt.money(restoTot)}</b> todavía no se asignan a ningún movimiento.` });
+  const nodoD = d => DN.find(n => n.id === "d:" + d);
+  R.filter(r => r.id.startsWith("r:rep:")).forEach(r => {
+    DN.forEach(n => { const v = n.id === "d:disp" ? (restoC[r.g] || 0) : sum(flujos.filter(f => f.g === r.g && "d:" + f.d === n.id), f => f.c); link(r, n, v, v); });
+  });
+  if (nGan) DN.forEach(n => { const v = n.id === "d:disp" ? restoG : sum(flujos.filter(f => "d:" + f.d === n.id), f => f.gg); link(nGan, n, v, v); });
+  return { headers: ["Pagó", "Costo", "Venta", "Reparto", "Destino"], cols: [P0, C1, C2, R, DN], links };
 }
 
 function dibujarSankey(svgCont, mod, info) {
-  const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(560, Math.max(420, W * 0.55)), TOP = 28, BW = 12, MINSLOT = movil ? 40 : 44, GAP = 10;
+  const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(560, Math.max(420, W * 0.55)), TOP = 28, BW = 12, MINSLOT = (movil ? 40 : 44) + (mod.hl ? 14 : 0), GAP = 10;
   const cols = mod.cols;
   if (!cols.some(c => c.length)) { svgCont.innerHTML = `<div class="empty">Sin datos en este periodo</div>`; return; }
   const maxTot = Math.max(...cols.map(c => sum(c, n => n.value)), 1);
@@ -1839,7 +1898,8 @@ function dibujarSankey(svgCont, mod, info) {
     let y = TOP + Math.max(0, (disp - alto) / 2);
     c.forEach(n => { n.y = y + (n.slot - n.h) / 2; n.x = xs[ci]; n.outY = n.y; n.inY = n.y; y += n.slot + GAP; });
   });
-  const defs = [], bands = [], hlIds = new Set();
+  const defs = [], bands = [], hlIds = new Set(), hlIn = {}, hlOut = {};
+  mod.links.forEach(l => { if (l.hl) { hlIn[l.t.id] = (hlIn[l.t.id] || 0) + l.v1; hlOut[l.s.id] = (hlOut[l.s.id] || 0) + l.v0; } });
   mod.links.forEach((l, i) => {
     if (l.hl) { hlIds.add(l.s.id); hlIds.add(l.t.id); }
     const w0 = l.v0 * k, w1 = l.v1 * k;
@@ -1854,7 +1914,9 @@ function dibujarSankey(svgCont, mod, info) {
     return `<g class="node${hlIds.has(n.id) ? " hlN" : ""}" data-id="${esc(n.id)}" style="cursor:pointer"><rect x="${n.x}" y="${n.y}" width="${BW}" height="${n.h}" rx="3" fill="${n.color}"/>
       <rect x="${n.x - 6}" y="${n.y - 6}" width="${BW + 12}" height="${n.h + 12}" fill="transparent"/>
       <text class="lbl" x="${cx}" y="${my - 3}" text-anchor="${anc}">${esc(n.label)}</text>
-      <text class="amt" x="${cx}" y="${my + 13}" text-anchor="${anc}">${fmt.money0(n.value)}</text></g>`;
+      ${mod.hl && hlIds.has(n.id)
+        ? `<text class="amt big" x="${cx}" y="${my + 15}" text-anchor="${anc}">${fmt.money0(hlIn[n.id] || hlOut[n.id] || 0)}</text><text class="tot" x="${cx}" y="${my + 29}" text-anchor="${anc}">de ${fmt.money0(n.value)}</text>`
+        : `<text class="amt" x="${cx}" y="${my + 13}" text-anchor="${anc}">${fmt.money0(n.value)}</text>`}</g>`;
   };
   const hdrs = mod.headers.map((h, i) => `<text class="hdr" x="${i === 0 ? 0 : i === nC - 1 ? W : xs[i] + BW / 2}" y="12" text-anchor="${i === 0 ? "start" : i === nC - 1 ? "end" : "middle"}">${esc(h || "")}</text>`).join("");
   svgCont.innerHTML = `<svg class="sankey${mod.hl ? " foco-item" : ""}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero">
@@ -1881,12 +1943,12 @@ function dibujarSankey(svgCont, mod, info) {
 
 function vBalance(main) {
   const meses = mesesBalance();
-  const st = (vBalance.st ||= { art: null, q: "", modo: "detalle" });
+  const st = (vBalance.st ||= { sel: [], q: "", modo: "detalle" });
   if (st.idx == null || st.idx >= meses.length) st.idx = meses.length - 1;
-  if (st.art && !artDe(st.art)) st.art = null;
+  st.sel = (st.sel || []).filter(id => artDe(id));
   clearInterval(vBalance.play); vBalance.play = null;
   const movil = matchMedia("(max-width:640px)").matches;
-  if (movil) st.art = null;
+  if (movil) st.sel = [];
   main.innerHTML = `<div class="sec-h" style="margin-bottom:14px"><div><h1>Balance</h1><p class="sub hide-m" style="margin:0" id="bSub"></p></div>
     <a class="btn hide-m" href="#/movimientos">Movimientos</a></div>
     ${S.sinMovs ? `<div class="cot-msg mid" style="margin:0 0 14px">Falta crear la tabla de movimientos: corre <b>sql/04_movimientos.sql</b> en Supabase.</div>` : ""}
@@ -1905,7 +1967,7 @@ function vBalance(main) {
         <div class="mute" id="tNota" style="font-size:11.5px;margin-top:8px"></div>
       </div>
       <div class="bal-k"><div id="bk" class="bal-k" style="display:contents"></div>
-        <div class="card art-sel"><h2 style="margin-bottom:8px">Por artículo</h2>
+        <div class="card art-sel"><div class="sec-h" style="margin:0"><h2 style="margin:0">Por artículo</h2><span class="mute" id="aSel" style="font-size:11.5px"></span></div>
           <input class="in" id="aQ" type="search" placeholder="Buscar artículo…" value="${esc(st.q)}">
           <div class="art-list" id="aL"></div></div>
       </div>
@@ -1913,31 +1975,35 @@ function vBalance(main) {
   const leyenda = cols => $("#sl").innerHTML = unicos(cols.flat().map(n => `${n.color}|${n.label.replace(/^Venta · .*/, "Venta")}`)).map(x => { const [c, l] = x.split("|"); return `<span><i style="background:${c}"></i>${esc(l)}</span>`; }).join("");
   const kpi = (l, v, sub, cls = "") => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="s">${sub}</div></div>`;
   const pinta = () => {
-    const a = st.art && artDe(st.art);
+    const arts = st.sel.map(artDe), a = arts.length ? arts[0] : null, uno = arts.length === 1;
     const detalle = a && st.modo === "detalle";
     $("#tBar").classList.toggle("hidden", !!detalle); $("#tNota").classList.toggle("hidden", !!detalle);
     $("#bArt").classList.toggle("hidden", !a);
     if (a) {
-      $("#bSub").textContent = detalle ? "El viaje del dinero de una pieza: quién pagó, lo que costó, en cuánto se vendió y cómo se repartió" : "Dónde está esta pieza dentro del flujo total";
-      $("#bArt").innerHTML = `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><span class="soft" style="font-size:12px">${esc(a.marca || "")}</span> <b>${esc(a.nombre)}</b> ${pillEst(a.estatus)}</div>
+      $("#bSub").textContent = detalle ? `El viaje del dinero${uno ? " de una pieza" : " de las piezas elegidas"}: quién pagó, lo que costó, en cuánto se vendió y cómo se repartió` : `Dónde ${uno ? "está esta pieza" : "están estas piezas"} dentro del flujo total`;
+      $("#bArt").innerHTML = `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div style="min-width:0">${uno
+          ? `<span class="soft" style="font-size:12px">${esc(a.marca || "")}</span> <b>${esc(a.nombre)}</b> ${pillEst(a.estatus)}`
+          : `<b>${arts.length} artículos</b> <span class="mute" style="font-size:12px">${esc(arts.map(x => x.nombre).join(" · ")).slice(0, 140)}</span>`}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg"><button data-modo="total" class="${!detalle ? "on" : ""}">◎ En el total</button><button data-modo="detalle" class="${detalle ? "on" : ""}">☰ Detalle</button></div>
-        <a class="btn sm" href="#/a/${esc(a.id)}">Abrir ficha</a><button class="btn sm" id="bTodos">✕ Ver todo</button></div></div>`;
-      $("#bTodos").onclick = () => { st.art = null; pinta(); };
+        ${uno ? `<a class="btn sm" href="#/a/${esc(a.id)}">Abrir ficha</a>` : ""}<button class="btn sm" id="bTodos">✕ Ver todo</button></div></div>`;
+      $("#bTodos").onclick = () => { st.sel = []; pinta(); };
       $$("[data-modo]", $("#bArt")).forEach(b => b.onclick = () => { st.modo = b.dataset.modo; pinta(); });
       let mod;
-      if (detalle) mod = modeloArticulo(a);
+      if (detalle) mod = modeloArticulos(arts);
       else {
         const ultimo = st.idx === meses.length - 1, B = calcularBalance(meses[st.idx], ultimo);
         $("#tMes").textContent = nombreMes(meses[st.idx]); $("#tRange").value = st.idx;
         $("#tPrev").disabled = st.idx === 0; $("#tNext").disabled = ultimo;
-        mod = modeloGlobal(B, a);
+        mod = modeloGlobal(B, arts);
       }
       dibujarSankey($("#sk"), mod, $("#si")); leyenda(mod.cols);
-      const com = (Number(a.comision_mxn) || 0) + (Number(a.envio_venta_mxn) || 0);
-      $("#bk").innerHTML = kpi("Costo total", fmt.money0(a.costo_total), `Pagado por ${esc(nombreP((a.pagado_por || "").toUpperCase()))}`)
-        + kpi("Precio de venta", a.venta_id ? fmt.money0(a.precio_venta) : "—", a.venta_id ? fmt.date(a.fecha_venta) : "Aún sin vender")
-        + kpi("Comisión + envío", a.venta_id ? fmt.money0(com) : "—", a.canal_venta || "")
-        + kpi("Ganancia", a.venta_id ? fmt.money0(a.utilidad) : "—", a.venta_id ? `Margen ${fmt.pct(a.margen)}` : "", a.venta_id ? signo(a.utilidad) : "");
+      const vend = arts.filter(x => x.venta_id), precio = sum(vend, x => x.precio_venta), util = sum(vend, x => x.utilidad);
+      const com = sum(vend, x => (Number(x.comision_mxn) || 0) + (Number(x.envio_venta_mxn) || 0));
+      const quien = unicos(arts.map(x => nombreP((x.pagado_por || "").toUpperCase()))).join(" y ");
+      $("#bk").innerHTML = kpi("Costo total", fmt.money0(sum(arts, x => x.costo_total)), `Pagado por ${esc(quien)}`)
+        + kpi("Precio de venta", vend.length ? fmt.money0(precio) : "—", uno ? (a.venta_id ? fmt.date(a.fecha_venta) : "Aún sin vender") : `${vend.length} de ${arts.length} vendidas`)
+        + kpi("Comisión + envío", vend.length ? fmt.money0(com) : "—", uno ? (a.canal_venta || "") : "")
+        + kpi("Ganancia", vend.length ? fmt.money0(util) : "—", vend.length ? `Margen ${fmt.pct(precio ? util / precio : null)}` : "", vend.length ? signo(util) : "");
     } else {
       $("#bSub").textContent = "Cuánto ha pagado cada quien, qué pasó con ese dinero y a dónde se fue";
       const ultimo = st.idx === meses.length - 1;
@@ -1957,10 +2023,25 @@ function vBalance(main) {
   };
   const pintaLista = () => {
     const fs = buscar(S.articulos.slice().sort((x, y) => (!!y.venta_id - !!x.venta_id) || String(y.fecha_venta || y.fecha_compra || "").localeCompare(String(x.fecha_venta || x.fecha_compra || ""))), st.q, ["nombre", "marca", "id", "color"]);
-    $("#aL").innerHTML = `<button class="art-row${!st.art ? " on" : ""}" data-a=""><span><b>Todos los artículos</b><small>Vista general con línea de tiempo</small></span></button>`
-      + fs.map(a => `<button class="art-row${st.art === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><small>${esc(a.marca || "—")} · ${esc(estatusDe(a.estatus).nombre)}</small></span>
-        <em class="${a.venta_id ? signo(a.utilidad) : "mute"}">${a.venta_id ? fmt.money0(a.utilidad) : fmt.money0(a.costo_total)}</em></button>`).join("");
-    $$(".art-row", $("#aL")).forEach(b => b.onclick = () => { st.art = b.dataset.a || null; pinta(); });
+    const sc = $("#aL").scrollTop;
+    $("#aL").innerHTML = `<div class="art-row${!st.sel.length ? " on" : ""}" data-a="" role="button" tabindex="0"><span><b>Todos los artículos</b><small>Vista general con línea de tiempo</small></span></div>`
+      + fs.map(a => `<div class="art-row${st.sel.includes(a.id) ? " on" : ""}" data-a="${esc(a.id)}" role="button" tabindex="0">
+        <label class="art-chk" title="Agregar a la selección"><input type="checkbox"${st.sel.includes(a.id) ? " checked" : ""}></label>
+        <span><b>${esc(a.nombre)}</b><small>${esc(a.marca || "—")} · ${esc(estatusDe(a.estatus).nombre)}</small></span>
+        <em class="${a.venta_id ? signo(a.utilidad) : "mute"}">${a.venta_id ? fmt.money0(a.utilidad) : fmt.money0(a.costo_total)}</em></div>`).join("");
+    $("#aL").scrollTop = sc;
+    $$(".art-row", $("#aL")).forEach(r => {
+      const id = r.dataset.a;
+      r.onclick = e => {
+        if (e.target.closest(".art-chk")) {   // casilla: agrega o quita de la selección (varios artículos)
+          if (e.target.tagName !== "INPUT") return;
+          st.sel = st.sel.includes(id) ? st.sel.filter(x => x !== id) : [...st.sel, id];
+        } else st.sel = id ? [id] : [];      // renglón: solo ese artículo
+        pinta();
+      };
+      r.onkeydown = e => { if (e.key === "Enter") r.click(); };
+    });
+    $("#aSel").textContent = st.sel.length > 1 ? `${st.sel.length} seleccionados` : "Usa las casillas para elegir varios";
   };
   $("#aQ").oninput = e => { st.q = e.target.value; pintaLista(); };
   const ir = i => { st.idx = Math.max(0, Math.min(meses.length - 1, i)); pinta(); };
