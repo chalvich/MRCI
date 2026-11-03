@@ -119,8 +119,53 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .cards{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .item{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
 .item:hover{border-color:var(--accent);transform:translateY(-2px)}
-.ph{aspect-ratio:1/1;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:12px;position:relative}
+.ph{aspect-ratio:1/1;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text-mute);font-size:12px;position:relative;overflow:hidden;min-height:0;flex:none}
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
+/* mini carrusel de fotos en la tarjeta */
+.car{position:absolute;inset:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.car::-webkit-scrollbar{display:none}
+.car img{flex:0 0 100%;width:100%;height:100%;object-fit:cover;scroll-snap-align:start;scroll-snap-stop:always}
+.car-btn{position:absolute;top:50%;margin-top:-16px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:18px;line-height:1;cursor:pointer;opacity:0;transition:opacity .15s;z-index:2}
+.car-btn.prev{left:8px}.car-btn.next{right:8px}
+@media (hover:hover){.item:hover .car-btn{opacity:1}}
+.dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:5px;pointer-events:none;z-index:2}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.dots i.on{background:#fff;width:14px;border-radius:3px}
+.ph .pill,.ph .trk,.ph .n{z-index:2}
+/* balance (flujo de dinero) */
+.sankey{width:100%;display:block;overflow:visible}
+.sankey .band{transition:opacity .15s}
+.sankey.foco .band:not(.on),.sankey.foco .node:not(.on){opacity:.15}
+.sankey text{font-family:var(--sans);paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.sankey .lbl{fill:var(--text-soft);font-size:12px}
+.sankey .amt{fill:var(--text);font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
+.sankey .hdr{fill:var(--text-mute);font-size:11px;letter-spacing:.08em;text-transform:uppercase;stroke-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--text-soft);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px}
+.sk-info{min-height:20px;font-size:13px;color:var(--text-soft);margin-top:8px}
+.bal{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;align-items:start}
+.bal-k{display:flex;flex-direction:column;gap:14px}
+.bal-k .kpi .v{font-size:26px}
+.tl-bar{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
+.tl-bar .mes{min-width:150px;text-align:center;font-weight:650;line-height:1.25}
+.tl-bar .mes .mute{font-weight:400}
+.tl-nav{font-size:22px;line-height:1;padding:4px 14px 8px;min-width:44px}
+.tl-nav:disabled{opacity:.3}
+#tPlayI{font-size:11px;letter-spacing:-1px}
+.tl-rango{flex:1;min-width:180px}
+.tl-rango input{width:100%;accent-color:var(--accent);margin:0}
+.tl-ext{display:flex;justify-content:space-between;font-size:11px;color:var(--text-mute)}
+@media (max-width:899px){.bal{grid-template-columns:minmax(0,1fr)}.bal-k{display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.bal-k{display:none}.tl-bar .mes{flex:1;min-width:0}.tl-rango{flex-basis:100%;order:5}#tPlay{order:4;flex-basis:100%}}
+.bd h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-mute);margin:18px 0 6px;font-weight:600}
+.bd-row{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+.bd-row:last-child{border-bottom:0}
+.bd-row .dot{width:9px;height:9px;border-radius:50%}
+.bd-row b{font-weight:600}
+.bd-row .v{font-weight:650;font-variant-numeric:tabular-nums;text-align:right}
+.bd-row .s{grid-column:2/3;font-size:12px;color:var(--text-mute)}
+.bd-row .s2{font-size:12px;color:var(--text-mute);text-align:right;font-variant-numeric:tabular-nums}
 .ph .pill{position:absolute;left:8px;top:8px;backdrop-filter:blur(6px)}
 .ph .n{position:absolute;right:8px;bottom:8px;font-size:11px;background:rgba(0,0,0,.55);padding:2px 7px;border-radius:999px;color:#fff}
 .item .b{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
@@ -372,12 +417,27 @@ async function tipoCambioJPY() {
   return S.tc;
 }
 
+/* ---------- personas y destinos del dinero ---------- */
+const nombreP = p => !p ? "Sin asignar" : p.length <= 3 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1).toLowerCase();
+const pagadores = () => uniq([...(CFG.PAGADORES || []).map(p => p.toUpperCase()), ...S.articulos.map(a => (a.pagado_por || "").toUpperCase())]);
+const unicos = a => [...new Set(a.filter(Boolean))];
+const destinosLista = () => unicos([...pagadores().map(p => `Pago tarjeta ${nombreP(p)}`), "Ahorro", "Otros", ...S.movs.map(m => m.destino)]);
+const VIZ = ["#3987e5", "#d95926", "#199e70", "#9085e9", "#c98500", "#d55181", "#e66767"];   // paleta validada (oscuro)
+const VIZ_GRIS = "#6e8195";
+// personas: azul, naranja, amarillo, magenta, rojo · ahorro = aqua, otros = violeta (orden fijo, nunca se recicla)
+function colorPersona(p) { const i = pagadores().indexOf((p || "").toUpperCase()); return i < 0 ? VIZ_GRIS : [VIZ[0], VIZ[1], VIZ[4], VIZ[5], VIZ[6]][i] || VIZ_GRIS; }
+function colorDestino(d) {
+  const p = pagadores().find(x => norm(d).endsWith(" " + norm(nombreP(x))));
+  if (p) return colorPersona(p);
+  return { ahorro: VIZ[2], otros: VIZ[3], disponible: VIZ_GRIS }[norm(d)] || VIZ[5];
+}
+
 /* =====================================================================
    ESTADO
    ===================================================================== */
 let sb = null;
 const S = {
-  user: null, estatus: [], marcas: [], canales: [], paquetes: [], articulos: [],
+  user: null, estatus: [], marcas: [], canales: [], paquetes: [], articulos: [], fotos: [], fotosPor: new Map(), movs: [], sinMovs: false,
   cargos: [], ventas: [], usuarios: [], urls: new Map(),
   ui: { q: "", est: "INV", marca: "", pag: "", orden: "reciente", vista: "grid" },
 };
@@ -411,7 +471,13 @@ async function cargarTodo() {
     fetchAll("cargos_tc", "fecha", false), fetchAll("ventas", "fecha_venta", false),
     fetchAll("usuarios_permitidos", "email"),
   ]);
-  Object.assign(S, { estatus, marcas, canales, paquetes, articulos, cargos, ventas, usuarios });
+  const [fotos, movs] = await Promise.all([
+    fetchAll("fotos", "id").catch(() => []),
+    fetchAll("movimientos", "fecha", false).then(r => { S.sinMovs = false; return r; }).catch(e => { console.warn("movimientos:", e); S.sinMovs = true; return []; }),
+  ]);
+  const fotosPor = new Map();
+  fotos.slice().sort((x, y) => (y.es_portada - x.es_portada) || (x.id - y.id)).forEach(f => { if (!fotosPor.has(f.articulo_id)) fotosPor.set(f.articulo_id, []); fotosPor.get(f.articulo_id).push(f.ruta); });
+  Object.assign(S, { estatus, marcas, canales, paquetes, articulos, cargos, ventas, usuarios, fotos, fotosPor, movs });
 }
 
 /* ---------- fotos: URLs firmadas (bucket privado) ---------- */
@@ -622,6 +688,15 @@ const MOD = {
     },
   },
 
+  movimientos: {
+    tabla: "movimientos", pk: "id", titulo: "movimiento",
+    campos: [
+      F("fecha", "Fecha", "date", { req: 1, def: () => new Date().toISOString().slice(0, 10) }),
+      F("destino", "Destino", "select", { req: 1, opts: () => destinosLista().map(d => [d, d]) }),
+      F("monto_mxn", "Monto (MXN)", "money", { req: 1 }),
+      F("descripcion", "Descripción", "textarea", { full: 1, hint: "Ej. pago de tarjeta Santander de octubre" }),
+    ],
+  },
   marcas:  { tabla: "marcas",  pk: "id",     titulo: "marca",  campos: [F("nombre", "Nombre", "text", { req: 1, full: 1 })] },
   canales: { tabla: "canales", pk: "nombre", titulo: "canal de venta", campos: [
     F("nombre", "Nombre", "text", { req: 1 }), F("comision_pct", "Comisión %", "number", { def: 0, cero: 1 }),
@@ -921,6 +996,8 @@ const RUTAS = [
   { k: "paquetes",  l: "Paquetes",  activo: false },
   { k: "cargos",    l: "Cargos TC", activo: false },
   { k: "ventas",    l: "Ventas",    activo: true },
+  { k: "balance",   l: "Balance",   activo: true },
+  { k: "movimientos", l: "Movimientos", activo: true },
   { k: "historial", l: "Historial", activo: true },
   { k: "ajustes",   l: "Catálogos", activo: true, admin: true },
 ];
@@ -1004,7 +1081,7 @@ function render() {
   if (!puedeVer(ruta)) { history.replaceState(null, "", "#/catalogo"); return render(); }
   const activa = ruta === "a" ? "catalogo" : ruta;
   const main = shell(activa);
-  const v = { tablero: vTablero, catalogo: vCatalogo, a: vFicha, paquetes: vPaquetes, cargos: vCargos, ventas: vVentas, historial: vHistorial, ajustes: vAjustes, usuario: vUsuario }[ruta] || vCatalogo;
+  const v = { tablero: vTablero, catalogo: vCatalogo, a: vFicha, paquetes: vPaquetes, cargos: vCargos, ventas: vVentas, balance: vBalance, movimientos: vMovimientos, historial: vHistorial, ajustes: vAjustes, usuario: vUsuario }[ruta] || vCatalogo;
   Promise.resolve(v(main, arg)).catch(e => { console.error(e); main.innerHTML = `<div class="err">${esc(errMsg(e))}</div>`; });
 }
 window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
@@ -1106,11 +1183,12 @@ async function vCatalogo(main) {
       tabla(lista, { filas: fs, cols, clave: "inv", totales: ["costo_total"], alClick: a => location.hash = `#/a/${a.id}` });
     } else {
       lista.innerHTML = fs.length ? `<div class="grid cards">${fs.map(a => `<div class="item" data-id="${esc(a.id)}">
-        <div class="ph">${a.portada ? `<img data-src="${esc(a.portada)}" alt="" loading="lazy">` : "Sin foto"}${pillEst(a.estatus)}${a.num_fotos > 1 ? `<span class="n">${a.num_fotos} fotos</span>` : ""}${a.estatus === "TRANSITO" && urlRastreo(a) ? `<a class="trk" href="${esc(urlRastreo(a))}" target="_blank" rel="noopener" title="Rastrear ${esc(guiaDe(a))}" aria-label="Rastrear envío">${ICON_PAQ}</a>` : ""}</div>
+        <div class="ph">${fotosHTML(a)}${pillEst(a.estatus)}${a.estatus === "TRANSITO" && urlRastreo(a) ? `<a class="trk" href="${esc(urlRastreo(a))}" target="_blank" rel="noopener" title="Rastrear ${esc(guiaDe(a))}" aria-label="Rastrear envío">${ICON_PAQ}</a>` : ""}</div>
         <div class="b"><div class="m">${esc(a.marca || "—")}</div><div class="t">${esc(a.nombre)}</div>
           <div class="p"><span class="mute">Costo <span class="num">${fmt.money0(a.costo_total)}</span></span>${a.precio_venta != null ? `<span class="num ${signo(a.utilidad)}">${fmt.money0(a.utilidad)}</span>` : a.precio_objetivo ? `<span class="num soft">${fmt.money0(a.precio_objetivo)}</span>` : ""}</div></div></div>`).join("")}</div>`
         : `<div class="card empty">No hay artículos con estos filtros</div>`;
-      $$(".item", lista).forEach(el => el.onclick = e => { if (!e.target.closest(".trk")) location.hash = `#/a/${el.dataset.id}`; });
+      $$(".item", lista).forEach(el => el.onclick = e => { if (!e.target.closest(".trk,.car-btn")) location.hash = `#/a/${el.dataset.id}`; });
+      activarCarruseles(lista);
       cargarImgs();
     }
   };
@@ -1123,6 +1201,30 @@ async function vCatalogo(main) {
   $$(".chip", main).forEach(c => c.onclick = () => { u.est = c.dataset.e; saveUI(); $$(".chip", main).forEach(x => x.classList.toggle("on", x === c)); pinta(); });
   $("#nuevo").onclick = () => abrirForm("articulos", null, {}, d => location.hash = `#/a/${d.id}`);
   $("#csv").onclick = () => csv("inventario", filtrar(), csvCols);
+}
+
+/* ---------- mini carrusel de las tarjetas ---------- */
+function fotosHTML(a) {
+  const rutas = S.fotosPor.get(a.id) || (a.portada ? [a.portada] : []);
+  if (!rutas.length) return "Sin foto";
+  const n = rutas.length;
+  return `<div class="car">${rutas.map((r, i) => `<img data-src="${esc(r)}" alt="" loading="${i ? "lazy" : "eager"}" draggable="false">`).join("")}</div>
+    ${n > 1 ? `<button class="car-btn prev" aria-label="Foto anterior">‹</button><button class="car-btn next" aria-label="Foto siguiente">›</button>
+    ${n <= 8 ? `<div class="dots">${rutas.map((_, i) => `<i${i ? "" : ' class="on"'}></i>`).join("")}</div>` : `<span class="n">1/${n}</span>`}` : ""}`;
+}
+function activarCarruseles(cont) {
+  $$(".car", cont).forEach(car => {
+    const ph = car.parentElement, n = car.children.length;
+    if (n < 2) return;
+    const marca = () => {
+      const i = Math.round(car.scrollLeft / car.clientWidth);
+      $$(".dots i", ph).forEach((d, k) => d.classList.toggle("on", k === i));
+      const c = $(".n", ph); if (c) c.textContent = `${i + 1}/${n}`;
+    };
+    car.addEventListener("scroll", () => requestAnimationFrame(marca), { passive: true });
+    $(".prev", ph).onclick = e => { e.stopPropagation(); car.scrollBy({ left: -car.clientWidth, behavior: "smooth" }); };
+    $(".next", ph).onclick = e => { e.stopPropagation(); car.scrollBy({ left: car.clientWidth, behavior: "smooth" }); };
+  });
 }
 
 /* ---------- FICHA DEL ARTÍCULO ---------- */
@@ -1368,7 +1470,7 @@ function lightbox(urls, i) {
 
 /* ---------- línea de historial legible ---------- */
 const ETIQ = Object.fromEntries(Object.values(MOD).flatMap(M => M.campos.filter(c => c.k).map(c => [c.k, c.l])));
-const TABLA_NOM = { articulos: "Artículo", ventas: "Venta", cargos_tc: "Cargo TC", fotos: "Foto", paquetes: "Paquete" };
+const TABLA_NOM = { articulos: "Artículo", ventas: "Venta", cargos_tc: "Cargo TC", fotos: "Foto", paquetes: "Paquete", movimientos: "Movimiento" };
 function valHist(k, v) {
   if (v === null || v === undefined || v === "") return "vacío";
   if (k === "estatus") return estatusDe(v).nombre;
@@ -1392,7 +1494,7 @@ function lineaHist(r, enFicha = false) {
       det = ks.map(k => `${esc(ETIQ[k] || k)}: ${esc(valHist(k, c[k].de))} → ${esc(valHist(k, c[k].a))}`).join("<br>");
     }
   } else if (r.accion === "ALTA") {
-    titulo = { articulos: "Artículo creado", ventas: `Venta registrada · ${fmt.money(c.precio_venta)}${c.canal ? " en " + esc(c.canal) : ""}`, cargos_tc: `Cargo TC (${esc(c.concepto || "")}) · ${fmt.money(c.monto_mxn)}`, fotos: "Foto agregada", paquetes: `Paquete ${esc(c.numero || "")} creado` }[r.tabla] || "Alta";
+    titulo = { articulos: "Artículo creado", ventas: `Venta registrada · ${fmt.money(c.precio_venta)}${c.canal ? " en " + esc(c.canal) : ""}`, cargos_tc: `Cargo TC (${esc(c.concepto || "")}) · ${fmt.money(c.monto_mxn)}`, fotos: "Foto agregada", paquetes: `Paquete ${esc(c.numero || "")} creado`, movimientos: `Movimiento · ${esc(c.destino || "")} · ${fmt.money(c.monto_mxn)}` }[r.tabla] || "Alta";
     if (r.tabla === "articulos" && c.notas && /Migrado/.test(c.notas)) det = "Migrado desde el Excel";
   } else {
     titulo = `${TABLA_NOM[r.tabla] || r.tabla} eliminado`;
@@ -1481,6 +1583,188 @@ function vVentas(main) {
   $("#q").oninput = pinta; $("#cob").onchange = pinta;
   $("#nuevo").onclick = () => abrirForm("ventas");
   $("#csv").onclick = () => csv("ventas", filtrar(), cols.map(c => ({ k: c.k, l: c.l })).concat([{ k: "destino", l: "Destino" }, { k: "monto_depositado", l: "Depositado" }, { k: "cuenta_deposito", l: "Cuenta" }]));
+}
+
+/* ---------- BALANCE: flujo del dinero ---------- */
+/* Línea de tiempo: el balance se ve ACUMULADO hasta el fin del mes elegido.
+   Lo que no tiene fecha (compras o ventas sin fecha) se cuenta solo en el mes actual. */
+function mesesBalance() {
+  const fechas = [...S.articulos.flatMap(a => [a.fecha_compra, a.fecha_venta]), ...S.movs.map(m => m.fecha)].filter(Boolean).map(f => String(f).slice(0, 7)).sort();
+  const hoy = new Date(), fin = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+  const meses = [];
+  let [y, m] = (fechas[0] || fin).split("-").map(Number);
+  while (true) { const k = `${y}-${String(m).padStart(2, "0")}`; meses.push(k); if (k >= fin) break; m++; if (m > 12) { m = 1; y++; } }
+  return meses;
+}
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const nombreMes = k => { const [y, m] = k.split("-").map(Number); return `${MESES[m - 1]} ${y}`; };
+const mesCorto = k => { const [y, m] = k.split("-").map(Number); return `${MESES[m - 1].slice(0, 3)} ${String(y).slice(2)}`; };
+function calcularBalance(hastaMes, esUltimo) {
+  const ok = f => f ? String(f).slice(0, 7) <= hastaMes : esUltimo;
+  const pers = pagadores();
+  const grupos = [...pers, ""];
+  const clave = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
+  const pagado = {}, recup = {}, gan = {}, nArt = {}, nVend = {};
+  grupos.forEach(g => { pagado[g] = recup[g] = gan[g] = 0; nArt[g] = nVend[g] = 0; });
+  let sinFecha = 0;
+  S.articulos.forEach(a => {
+    const g = clave(a);
+    if (ok(a.fecha_compra)) { pagado[g] += Number(a.costo_total) || 0; nArt[g]++; }
+    if (a.venta_id) { if (!a.fecha_venta) sinFecha++; if (ok(a.fecha_venta)) { recup[g] += Number(a.ingreso_neto) || 0; gan[g] += Number(a.utilidad) || 0; nVend[g]++; } }
+  });
+  const dest = {};
+  S.movs.filter(m => ok(m.fecha)).forEach(m => { dest[m.destino] = (dest[m.destino] || 0) + Number(m.monto_mxn); });
+  const totRec = sum(grupos, g => recup[g]), totDest = sum(Object.keys(dest), k => dest[k]);
+  return { grupos: grupos.filter(g => pagado[g] || recup[g]), pagado, recup, gan, nArt, nVend, dest, sinFecha,
+    disponible: Math.max(0, totRec - totDest), exceso: Math.max(0, totDest - totRec), totRec, totDest,
+    totPag: sum(grupos, g => pagado[g]), totGan: sum(grupos, g => gan[g]) };
+}
+
+function dibujarSankey(svgCont, B, info) {
+  const W = Math.max(300, svgCont.clientWidth), movil = W < 560, H = movil ? 340 : Math.min(560, Math.max(420, W * 0.55)), TOP = 28, BW = 12, MINSLOT = movil ? 40 : 44, GAP = 10;
+  const pers = B.grupos.map(g => ({ id: "p:" + g, g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS }));
+  const c1 = pers.map(n => ({ ...n, value: B.pagado[n.g] })).filter(n => n.value > 0);
+  const c2 = pers.map(n => ({ ...n, id: "r:" + n.g, value: B.recup[n.g] })).filter(n => n.value > 0);
+  const destOrden = destinosLista().filter(d => B.dest[d] > 0).concat(Object.keys(B.dest).filter(d => !destinosLista().includes(d) && B.dest[d] > 0));
+  const c3 = destOrden.map(d => ({ id: "d:" + d, label: d, color: colorDestino(d), value: B.dest[d] }));
+  if (B.disponible > 0.5) c3.push({ id: "d:disp", label: "Disponible", color: VIZ_GRIS, value: B.disponible });
+  const cols = [c1, c2, c3];
+  if (!c1.length && !c2.length) { svgCont.innerHTML = `<div class="empty">Sin datos en este periodo</div>`; return; }
+  const maxTot = Math.max(...cols.map(c => sum(c, n => n.value)), 1);
+  const disp = H - TOP - 8;
+  const k = (disp - GAP * Math.max(...cols.map(c => Math.max(0, c.length - 1)))) / maxTot;
+  const xs = [0, W / 2 - BW / 2, W - BW];
+  cols.forEach((c, ci) => {
+    c.forEach(n => { n.h = Math.max(n.value * k, 3); n.slot = Math.max(n.h, MINSLOT); });
+    const alto = sum(c, n => n.slot) + GAP * Math.max(0, c.length - 1);
+    let y = TOP + Math.max(0, (disp - alto) / 2);
+    c.forEach(n => { n.y = y + (n.slot - n.h) / 2; n.x = xs[ci]; n.outY = n.y; n.inY = n.y; y += n.slot + GAP; });
+  });
+  const links = [];
+  c1.forEach(a => { const b = c2.find(x => x.g === a.g); if (b) links.push({ s: a, t: b, w0: a.h, w1: b.h }); });
+  const totR = sum(c2, n => n.value), totD = sum(c3, n => n.value);
+  if (totR > 0 && totD > 0) c2.forEach(a => c3.forEach(b => links.push({ s: a, t: b, w0: a.h * b.value / totD, w1: b.h * a.value / totR })));
+  const defs = [], bands = [];
+  links.forEach((l, i) => {
+    const x0 = l.s.x + BW, x1 = l.t.x, xm = (x0 + x1) / 2;
+    const y0 = l.s.outY, y1 = l.t.inY; l.s.outY += l.w0; l.t.inY += l.w1;
+    defs.push(`<linearGradient id="sg${i}" x1="0" x2="1"><stop offset="0" stop-color="${l.s.color}"/><stop offset="1" stop-color="${l.t.color}"/></linearGradient>`);
+    bands.push(`<path class="band" data-s="${esc(l.s.id)}" data-t="${esc(l.t.id)}" fill="url(#sg${i})" fill-opacity=".38" d="M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + l.w1} C${xm},${y1 + l.w1} ${xm},${y0 + l.w0} ${x0},${y0 + l.w0} Z"><title>${esc(l.s.label)} → ${esc(l.t.label)}</title></path>`);
+  });
+  const nodo = (n, ci) => {
+    const cx = ci === 0 ? n.x + BW + 8 : n.x - 8, anc = ci === 0 ? "start" : "end", my = n.y + n.h / 2;
+    return `<g class="node" data-id="${esc(n.id)}" style="cursor:pointer"><rect x="${n.x}" y="${n.y}" width="${BW}" height="${n.h}" rx="3" fill="${n.color}"/>
+      <rect x="${n.x - 6}" y="${n.y - 6}" width="${BW + 12}" height="${n.h + 12}" fill="transparent"/>
+      <text class="lbl" x="${cx}" y="${my - 3}" text-anchor="${anc}">${esc(n.label)}</text>
+      <text class="amt" x="${cx}" y="${my + 13}" text-anchor="${anc}">${fmt.money0(n.value)}</text></g>`;
+  };
+  svgCont.innerHTML = `<svg class="sankey" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero: pagado, recuperado y destino">
+    <defs>${defs.join("")}</defs>
+    <text class="hdr" x="0" y="12">Pagado</text><text class="hdr" x="${W / 2}" y="12" text-anchor="middle">Recuperado</text><text class="hdr" x="${W}" y="12" text-anchor="end">Destino</text>
+    ${bands.join("")}${c1.map(n => nodo(n, 0)).join("")}${c2.map(n => nodo(n, 1)).join("")}${c3.map(n => nodo(n, 2)).join("")}</svg>`;
+  const svg = $("svg", svgCont);
+  const todos = [...c1, ...c2, ...c3];
+  const foco = id => {
+    if (!id) { svg.classList.remove("foco"); $$(".on", svg).forEach(e => e.classList.remove("on")); info.innerHTML = "Toca una barra para ver su detalle."; return; }
+    svg.classList.add("foco"); $$(".on", svg).forEach(e => e.classList.remove("on"));
+    $$(".band", svg).forEach(b => { if (b.dataset.s === id || b.dataset.t === id) { b.classList.add("on"); $(`.node[data-id="${CSS.escape(b.dataset.s === id ? b.dataset.t : b.dataset.s)}"]`, svg)?.classList.add("on"); } });
+    $(`.node[data-id="${CSS.escape(id)}"]`, svg)?.classList.add("on");
+    const n = todos.find(x => x.id === id), tipo = id[0];
+    info.innerHTML = tipo === "p" ? `<b>${esc(n.label)}</b> ha pagado <b>${fmt.money(n.value)}</b> en ${B.nArt[n.g]} artículos (costo + envío + impuestos).`
+      : tipo === "r" ? `De lo que pagó <b>${esc(n.label)}</b> se han recuperado <b>${fmt.money(n.value)}</b> en ${B.nVend[n.g]} ventas · ganancia ${fmt.money(B.gan[n.g])}.`
+      : `<b>${esc(n.label)}</b>: ${fmt.money(n.value)} (${fmt.pct(B.totRec ? n.value / B.totRec : null)} de lo recuperado).`;
+  };
+  let actual = null;
+  svg.addEventListener("click", e => { const g = e.target.closest(".node"); const id = g?.dataset.id || null; actual = actual === id ? null : id; foco(actual); });
+  if (matchMedia("(hover:hover)").matches) {
+    svg.addEventListener("mouseover", e => { const g = e.target.closest(".node"); if (g && !actual) foco(g.dataset.id); });
+    svg.addEventListener("mouseleave", () => { if (!actual) foco(null); });
+  }
+  foco(null);
+}
+
+function vBalance(main) {
+  const meses = mesesBalance();
+  const st = (vBalance.st ||= {});
+  if (st.idx == null || st.idx >= meses.length) st.idx = meses.length - 1;
+  clearInterval(vBalance.play); vBalance.play = null;
+  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px"><div><h1>Balance</h1><p class="sub hide-m" style="margin:0">Cuánto ha pagado cada quien, cuánto se ha recuperado y a dónde se fue</p></div>
+    <a class="btn hide-m" href="#/movimientos">Movimientos</a></div>
+    ${S.sinMovs ? `<div class="cot-msg mid" style="margin:0 0 14px">Falta crear la tabla de movimientos: corre <b>sql/04_movimientos.sql</b> en Supabase.</div>` : ""}
+    <div class="bal">
+      <div class="card">
+        <div id="sk"></div><div class="legend" id="sl"></div><div class="sk-info" id="si"></div>
+        <div class="tl-bar">
+          <button class="btn icon tl-nav" id="tPrev" aria-label="Mes anterior" title="Mes anterior (←)">‹</button>
+          <div class="mes"><div class="mute" style="font-size:11px">Acumulado hasta</div><div id="tMes"></div></div>
+          <button class="btn icon tl-nav" id="tNext" aria-label="Mes siguiente" title="Mes siguiente (→)">›</button>
+          <button class="btn sm" id="tPlay" title="Recorrer mes por mes desde el inicio"><span id="tPlayI">▷</span> <span id="tPlayT">Reproducir</span></button>
+          <div class="tl-rango"><input type="range" id="tRange" min="0" max="${meses.length - 1}" step="1" value="${st.idx}" aria-label="Línea de tiempo">
+            <div class="tl-ext"><span>${mesCorto(meses[0])}</span><span>${mesCorto(meses[meses.length - 1])}</span></div></div>
+        </div>
+        <div class="mute" id="tNota" style="font-size:11.5px;margin-top:8px"></div>
+      </div>
+      <div class="bal-k" id="bk"></div>
+    </div>`;
+  const pinta = () => {
+    const ultimo = st.idx === meses.length - 1;
+    const B = calcularBalance(meses[st.idx], ultimo);
+    $("#tMes").textContent = nombreMes(meses[st.idx]);
+    $("#tRange").value = st.idx;
+    $("#tPrev").disabled = st.idx === 0; $("#tNext").disabled = ultimo;
+    $("#tNota").textContent = B.sinFecha && !ultimo ? `${B.sinFecha} ventas sin fecha de venta aparecen hasta el mes actual. Captúrales la fecha para verlas en su mes.` : "";
+    $("#bk").innerHTML = `<div class="card kpi"><div class="l">Pagado</div><div class="v">${fmt.money0(B.totPag)}</div><div class="s">Costo + envío + impuestos</div></div>
+      <div class="card kpi"><div class="l">Recuperado en ventas</div><div class="v">${fmt.money0(B.totRec)}</div><div class="s">Ganancia <span class="${signo(B.totGan)}">${fmt.money0(B.totGan)}</span></div></div>
+      <div class="card kpi"><div class="l">Asignado</div><div class="v">${fmt.money0(B.totDest)}</div><div class="s">Tarjetas, ahorro y otros</div></div>
+      <div class="card kpi"><div class="l">Disponible</div><div class="v ${B.exceso ? "neg" : ""}">${fmt.money0(B.exceso ? -B.exceso : B.disponible)}</div><div class="s">${B.exceso ? "Se asignó más de lo recuperado" : "Recuperado sin asignar"}</div></div>`;
+    dibujarSankey($("#sk"), B, $("#si"));
+    const ley = [...B.grupos.map(g => [nombreP(g), g ? colorPersona(g) : VIZ_GRIS]),
+      ...destinosLista().filter(d => B.dest[d] && !pagadores().some(p => colorDestino(d) === colorPersona(p))).map(d => [d, colorDestino(d)]),
+      ...(B.disponible > 0.5 ? [["Disponible", VIZ_GRIS]] : [])];
+    $("#sl").innerHTML = unicos(ley.map(x => x.join("|"))).map(x => { const [l, c] = x.split("|"); return `<span><i style="background:${c}"></i>${esc(l)}</span>`; }).join("");
+  };
+  const ir = i => { st.idx = Math.max(0, Math.min(meses.length - 1, i)); pinta(); };
+  const parar = () => { clearInterval(vBalance.play); vBalance.play = null; $("#tPlayI").textContent = "▷"; $("#tPlayT").textContent = "Reproducir"; };
+  $("#tPrev").onclick = () => { parar(); ir(st.idx - 1); };
+  $("#tNext").onclick = () => { parar(); ir(st.idx + 1); };
+  $("#tRange").oninput = e => { parar(); ir(+e.target.value); };
+  $("#tPlay").onclick = () => {
+    if (vBalance.play) return parar();
+    if (st.idx >= meses.length - 1) ir(0);
+    $("#tPlayI").textContent = "❚❚"; $("#tPlayT").textContent = "Pausa";
+    vBalance.play = setInterval(() => { if (!location.hash.startsWith("#/balance") || st.idx >= meses.length - 1) return parar(); ir(st.idx + 1); }, 1100);
+  };
+  pinta();
+  if (!vBalance.teclas) {
+    vBalance.teclas = true;
+    addEventListener("keydown", e => {
+      if (!location.hash.startsWith("#/balance") || $(".ov") || /input|select|textarea/i.test(e.target.tagName)) return;
+      if (e.key === "ArrowLeft") $("#tPrev")?.click();
+      if (e.key === "ArrowRight") $("#tNext")?.click();
+    });
+    let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { if (location.hash.startsWith("#/balance")) render(); }, 200); });
+  }
+}
+
+function vMovimientos(main) {
+  const st = (vMovimientos.st ||= { dest: "" });
+  main.innerHTML = `<div class="sec-h" style="margin-bottom:14px;gap:12px"><div style="min-width:0"><h1>Movimientos</h1><p class="sub hide-m" style="margin:0">Pagos de tarjeta, ahorro y otros destinos del dinero recuperado</p></div>
+    <div style="display:flex;gap:8px;flex:none"><button class="btn hide-m" id="csv">CSV</button><button class="btn pri" id="nuevo">+ <span class="hide-m">Movimiento</span><span class="show-m">Nuevo</span></button></div></div>
+    ${S.sinMovs ? `<div class="cot-msg mid" style="margin:0 0 14px">Falta crear la tabla: corre <b>sql/04_movimientos.sql</b> en Supabase y recarga.</div>` : ""}
+    <div class="chips">${[["", "Todos"], ...destinosLista().map(d => [d, d])].map(([k, l]) => `<button class="chip${st.dest === k ? " on" : ""}" data-d="${esc(k)}">${k ? `<i class="dot-c" style="background:${colorDestino(k)}"></i>` : ""}${esc(l)}<b>${fmt.money0(sum(S.movs.filter(m => !k || m.destino === k), m => m.monto_mxn))}</b></button>`).join("")}</div>
+    <div id="l"></div>`;
+  const cols = [
+    { k: "fecha", l: "Fecha", f: fmt.date },
+    { k: "destino", l: "Destino", h: r => `<span class="dot-c" style="background:${colorDestino(r.destino)}"></span>${esc(r.destino)}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>` },
+    { k: "creado_por", l: "Registró", hm: 1, h: r => esc((r.creado_por || "").split("@")[0]) },
+    { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money },
+  ];
+  const filtrar = () => S.movs.filter(m => !st.dest || m.destino === st.dest);
+  const pinta = () => tabla($("#l"), { filas: filtrar(), cols, clave: "movs", totales: ["monto_mxn"], alClick: m => abrirForm("movimientos", m) });
+  pinta();
+  $$("[data-d]", main).forEach(b => b.onclick = () => { st.dest = b.dataset.d; $$("[data-d]", main).forEach(x => x.classList.toggle("on", x === b)); pinta(); });
+  $("#nuevo").onclick = () => S.sinMovs ? toast("Primero corre sql/04_movimientos.sql en Supabase", true) : abrirForm("movimientos", null, st.dest ? { destino: st.dest } : {});
+  $("#csv").onclick = () => csv("movimientos", filtrar(), [["fecha", "Fecha"], ["destino", "Destino"], ["monto_mxn", "Monto"], ["descripcion", "Descripción"], ["creado_por", "Registró"]].map(([k, l]) => ({ k, l })));
 }
 
 /* ---------- HISTORIAL ---------- */
