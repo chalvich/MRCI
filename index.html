@@ -36,6 +36,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px}
 .mute{color:var(--text-mute)} .soft{color:var(--text-soft)} .num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .pos{color:var(--green)} .neg{color:var(--red)} .warn{color:var(--amber)}
+.costos .quien{display:none}.costos.ver-quien .quien{display:inline-block}
+.btn.icon.info-btn{width:30px;height:30px;padding:0;display:grid;place-items:center;color:var(--text-mute)}
+.btn.icon.info-btn.on{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
 .quien{display:inline-block;font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:99px;margin-left:4px;vertical-align:1px;color:var(--qc);background:color-mix(in srgb,var(--qc) 16%,transparent)}
 /* Íconos nativos (calendario, reloj, flechas de número) siguen el tema */
 :root{color-scheme:dark}
@@ -1359,8 +1362,8 @@ async function vFicha(main, id) {
   if (!a) { main.innerHTML = `<div class="card empty">No encontré el artículo <b>${esc(id)}</b>. <a href="#/catalogo">Volver</a></div>`; return; }
   const venta = S.ventas.find(v => v.articulo_id === id);
   const cargos = S.cargos.filter(c => c.articulo_id === id);
-  const qp = quienPago(a), varios = unicos(Object.values(qp).filter(Boolean)).length > 1 || !!(a.envio_pagado_por || a.impuestos_pagado_por || a.otros_pagado_por || a.paquete_pagado_por);
-  const quienTag = g => varios && g ? ` <span class="quien" style="--qc:${colorPersona(g)}">${esc(nombreP(g))}</span>` : "";
+  const qp = quienPago(a);
+  const quienTag = g => g ? ` <span class="quien" style="--qc:${colorPersona(g)}">${esc(nombreP(g))}</span>` : "";
   const paq = S.paquetes.find(p => p.numero === a.paquete_numero);
   const enPaq = paq ? S.articulos.filter(x => x.paquete_numero === paq.numero) : [];
   const ests = S.estatus;
@@ -1390,7 +1393,8 @@ async function vFicha(main, id) {
       <div class="card sec"><h2>Línea de tiempo</h2><div id="tl" class="mute">Cargando…</div></div>
     </div>
     <div>
-      <div class="card"><h2>Costos</h2><dl class="kv">
+      <div class="card costos${S.verQuien ? " ver-quien" : ""}" id="cCos"><div class="sec-h" style="margin:0 0 10px"><h2 style="margin:0">Costos</h2>
+        <button class="btn icon info-btn${S.verQuien ? " on" : ""}" id="bQuien" title="Ver quién pagó cada costo" aria-label="Ver quién pagó cada costo" aria-pressed="${!!S.verQuien}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg></button></div><dl class="kv">
         <dt>Artículo${quienTag(qp.art)}</dt><dd>${fmt.money(a.pago_mxn)}${a.precio_jpy ? ` <span class="mute">(${fmt.jpy(a.precio_jpy)})</span>` : ""}</dd>
         <dt>Envío internacional${Number(a.envio_mxn_efectivo) ? quienTag(qp.env) : ""} ${a.envio_prorrateado ? '<span class="tag">prorrateado</span>' : ""}</dt><dd>${fmt.money(a.envio_mxn_efectivo)}</dd>
         <dt>Impuestos${Number(a.impuestos_mxn) ? quienTag(qp.imp) : ""}</dt><dd>${fmt.money(a.impuestos_mxn)}</dd>
@@ -1456,6 +1460,7 @@ async function vFicha(main, id) {
   $("[data-cot]") && ($("[data-cot]").onclick = () => { verCot(true); scrollTo(0, 0); });
   $("#evta") && ($("#evta").onclick = () => abrirForm("ventas", venta, {}, () => render()));
   $("#epaq") && ($("#epaq").onclick = () => abrirForm("paquetes", paq, {}, () => render()));
+  $("#bQuien").onclick = () => { S.verQuien = !S.verQuien; $("#cCos").classList.toggle("ver-quien", S.verQuien); $("#bQuien").classList.toggle("on", S.verQuien); $("#bQuien").setAttribute("aria-pressed", S.verQuien); };
   $("#ncargo").onclick = () => abrirForm("cargos_tc", null, { articulo_id: id, fecha: new Date().toISOString().slice(0, 10), pagado_por: S.sinQuien ? undefined : qp.art || undefined }, () => render());
   $("#est").onchange = async e => {
     const { error } = await sb.from("articulos").update({ estatus: e.target.value }).eq("id", id);
