@@ -36,6 +36,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px}
 .mute{color:var(--text-mute)} .soft{color:var(--text-soft)} .num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .pos{color:var(--green)} .neg{color:var(--red)} .warn{color:var(--amber)}
+.quien{display:inline-block;font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:99px;margin-left:4px;vertical-align:1px;color:var(--qc);background:color-mix(in srgb,var(--qc) 16%,transparent)}
+/* Íconos nativos (calendario, reloj, flechas de número) siguen el tema */
+:root{color-scheme:dark}
+input[type=date]::-webkit-calendar-picker-indicator,input[type=time]::-webkit-calendar-picker-indicator,input[type=datetime-local]::-webkit-calendar-picker-indicator,input[type=month]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.85;filter:invert(62%) sepia(60%) saturate(2400%) hue-rotate(195deg) brightness(102%)}
+input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .hidden{display:none!important}
 
 /* ---------- shell ---------- */
@@ -158,8 +163,9 @@ body:has(.bal) .top-row,body:has(.bal) nav.tabs,main:has(> .bal){max-width:1880p
 @media (min-width:1200px){
   .bal{grid-template-columns:minmax(0,1fr) 230px 300px}
   .bal>.card:first-child{grid-row:auto}
-  .art-sel{position:sticky;top:12px}
-  .art-list{max-height:calc(100vh - 290px);max-height:calc(100dvh - 290px)}
+  .bal{align-items:stretch}
+  .bal-k .kpi{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .bal .art-list{flex:1 1 0;min-height:240px;max-height:none}
 }
 .bal-k .kpi .v{font-size:26px}
 .art-sel{display:flex;flex-direction:column;gap:8px}
@@ -456,7 +462,26 @@ async function tipoCambioJPY() {
 
 /* ---------- personas y destinos del dinero ---------- */
 const nombreP = p => !p ? "Sin asignar" : p.length <= 3 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1).toLowerCase();
-const pagadores = () => uniq([...(CFG.PAGADORES || []).map(p => p.toUpperCase()), ...S.articulos.map(a => (a.pagado_por || "").toUpperCase())]);
+const pagadores = () => uniq([...(CFG.PAGADORES || []).map(p => p.toUpperCase()),
+  ...S.articulos.flatMap(a => [a.pagado_por, a.envio_pagado_por, a.impuestos_pagado_por, a.otros_pagado_por]).map(p => (p || "").toUpperCase())]);
+/* ¿Quién pagó cada costo? Vacío = lo pagó quien pagó el artículo (el envío primero toma al del paquete). */
+const claveP = (p, pers = pagadores()) => { const u = (p || "").toUpperCase(); return pers.includes(u) ? u : ""; };
+function quienPago(a, pers = pagadores()) {
+  const b = a.pagado_por;
+  return { art: claveP(b, pers), env: claveP(a.envio_pagado_por || a.paquete_pagado_por || b, pers), imp: claveP(a.impuestos_pagado_por || b, pers), otr: claveP(a.otros_pagado_por || b, pers) };
+}
+function partesPago(a, pers = pagadores()) {   // { CG: monto, CHAVA: monto }
+  const q = quienPago(a, pers), o = {};
+  [[q.art, a.pago_mxn], [q.env, a.envio_mxn_efectivo], [q.imp, a.impuestos_mxn], [q.otr, a.otros_costos_mxn]].forEach(([g, x]) => { x = Number(x) || 0; if (x) o[g] = (o[g] || 0) + x; });
+  if (!Object.keys(o).length) o[q.art] = 0;
+  return o;
+}
+function fracPago(a, pers = pagadores()) {      // { CG: 0.82, CHAVA: 0.18 }
+  const p = partesPago(a, pers), ks = Object.keys(p), t = sum(ks, g => p[g]);
+  return Object.fromEntries(ks.map(g => [g, t ? p[g] / t : 1 / ks.length]));
+}
+const quienesPagaron = arts => unicos(arts.flatMap(a => Object.keys(partesPago(a)))).map(nombreP).join(" y ");
+const opsPagador = () => pagadores().filter(Boolean).map(p => [p, nombreP(p)]);
 const unicos = a => [...new Set(a.filter(Boolean))];
 const destinosLista = () => unicos([...pagadores().map(p => `Pago tarjeta ${nombreP(p)}`), "Ahorro", "Otros", ...S.movs.map(m => m.destino)]);
 const VIZ = ["#3987e5", "#d95926", "#199e70", "#9085e9", "#c98500", "#d55181", "#e66767"];   // paleta validada (oscuro)
@@ -517,6 +542,8 @@ async function cargarTodo() {
   const fotosPor = new Map();
   fotos.slice().sort((x, y) => (y.es_portada - x.es_portada) || (x.id - y.id)).forEach(f => { if (!fotosPor.has(f.articulo_id)) fotosPor.set(f.articulo_id, []); fotosPor.get(f.articulo_id).push(f.ruta); });
   Object.assign(S, { estatus, marcas, canales, paquetes, articulos, cargos, ventas, usuarios, fotos, fotosPor, movs });
+  // ¿Ya se corrió sql/07_quien_pago.sql? Si no, se ocultan los campos nuevos para no fallar al guardar
+  S.sinQuien = articulos.length > 0 && !("impuestos_pagado_por" in articulos[0]);
 }
 
 /* ---------- fotos: URLs firmadas (bucket privado) ---------- */
@@ -589,7 +616,7 @@ const MOD = {
       F("talla", "Talla", "select", { opts: b => tallasPara(b?.categoria).map(t => [t, t]), dep: "categoria" }),
       F("color", "Color", "color", { full: 1 }),
       F("condicion", "Condición", "list", { opts: () => ["Nuevo", "Como nuevo", "Buen estado", "Con detalles"] }),
-      F("pagado_por", "Pagado por", "list", { opts: listas.pagador }),
+      F("pagado_por", "¿Quién pagó el artículo?", "list", { opts: listas.pagador }),
       F("ubicacion", "Ubicación física"),
       F("descripcion", "Descripción", "textarea", { full: 1 }),
       SEC("Compra"),
@@ -604,8 +631,11 @@ const MOD = {
       F("paquete_numero", "Paquete (K…)", "list", { opts: listas.paquete, hint: "Si no existe, se crea solo" }),
       F("rastreo_correo", "Guía Japan Post", "text", { hint: "Ej. LX333794859JP · activa el botón 📦 de rastreo" }),
       F("costo_envio_mxn", "Envío internacional (MXN)", "money", { hint: "Vacío = se reparte el total del paquete" }),
+      F("envio_pagado_por", "¿Quién pagó el envío?", "select", { opts: opsPagador, vacio: "Igual que el paquete / artículo", oculto: () => S.sinQuien }),
       F("impuestos_mxn", "Impuestos (MXN)", "money"),
+      F("impuestos_pagado_por", "¿Quién pagó los impuestos?", "select", { opts: opsPagador, vacio: "Igual que el artículo", oculto: () => S.sinQuien }),
       F("otros_costos_mxn", "Otros costos (MXN)", "money"),
+      F("otros_pagado_por", "¿Quién pagó otros costos?", "select", { opts: opsPagador, vacio: "Igual que el artículo", oculto: () => S.sinQuien }),
       SEC("Notas"),
       // Venta esperada: desactivada (oculto: 1). Para reactivarla quita "oculto: 1".
       F("precio_objetivo", "Precio objetivo (MXN)", "money", { oculto: 1 }),
@@ -649,6 +679,7 @@ const MOD = {
       F("total_jpy", "Total (JPY)", "jpy"),
       F("total_usd", "Total (USD)", "usd"),
       F("total_mxn", "Total (MXN)", "money", { hint: "Se reparte entre artículos sin envío propio" }),
+      F("pagado_por", "¿Quién pagó el envío?", "select", { opts: opsPagador, vacio: "Quien pagó cada artículo", oculto: () => S.sinQuien, hint: "Aplica a todas sus piezas, salvo que una diga otra cosa" }),
       SEC("Detalle"),
       F("peso_g", "Peso (g)", "number"),
       F("dimensiones", "Dimensiones", "text", { hint: "ej. 32 × 22 × 12 cm" }),
@@ -670,10 +701,11 @@ const MOD = {
     tabla: "cargos_tc", pk: "id", titulo: "cargo",
     campos: [
       F("fecha", "Fecha", "date", { req: 1, def: () => new Date().toISOString().slice(0, 10) }),
-      F("concepto", "Concepto", "select", { opts: () => ["Compra", "Envío", "Impuestos", "Otro"].map(x => [x, x]), req: 1 }),
+      F("concepto", "Concepto", "select", { opts: () => ["Compra", "Envío", "Impuestos", "Otro"].map(x => [x, x]), req: 1, def: "Compra" }),
       F("monto_mxn", "Monto (MXN)", "money", { req: 1 }),
       F("articulo_id", "Artículo", "articulo", { hint: "Déjalo vacío si es un gasto personal" }),
       F("descripcion", "Descripción", "text", { full: 1 }),
+      F("pagado_por", "¿Quién hizo el cargo?", "select", { opts: opsPagador, vacio: "Automático (según el artículo)", oculto: () => S.sinQuien, hint: "Automático = quien pagó ese costo del artículo" }),
       F("tarjeta", "Tarjeta", "list", { opts: listas.tarjeta }),
       F("banco", "Banco", "list", { opts: listas.banco }),
       F("estado", "Estado", "select", { opts: () => [["PENDIENTE", "Pendiente"], ["PAGADO", "Pagado"]], req: 1, def: "PENDIENTE" }),
@@ -682,6 +714,10 @@ const MOD = {
       F("es_personal", "Es gasto personal (no del negocio)", "bool"),
       F("notas", "Notas", "textarea", { full: 1 }),
     ],
+    async antes(v) {   // si no se dijo quién, se toma de quién pagó ese costo del artículo
+      const a = artDe(v.articulo_id);
+      if (!S.sinQuien && !v.pagado_por && a) v.pagado_por = quienPago(a)[{ Compra: "art", "Envío": "env", Impuestos: "imp", Otro: "otr" }[v.concepto] || "art"] || null;
+    },
   },
 
   ventas: {
@@ -864,7 +900,7 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
     ? `<div class="fld${c.full ? " full" : ""}">${inputDe(c, base[c.k])}</div>`
     : `<div class="fld${c.full ? " full" : ""}"><label for="f_${c.k}">${esc(c.l)}${c.req ? ' <span class="req">*</span>' : ""}${c.t === "color" ? ` <span class="col-sel" data-colsel="${c.k}">${base[c.k] ? puntoColor(base[c.k]) : ""}</span>` : ""}</label>${inputDe(c, base[c.k], base)}${c.hint ? `<span class="hint">${esc(c.hint)}</span>` : ""}${c.tc ? `<label class="sw tcx"><input type="checkbox" data-tc> <span>Calcular con el tipo de cambio de hoy (¥ → MXN)</span></label><span class="hint" data-tcinfo></span>` : ""}</div>`;
   const grupos = [];
-  M.campos.filter(c => !c.oculto).forEach(c => {
+  M.campos.filter(c => !(typeof c.oculto === "function" ? c.oculto() : c.oculto)).forEach(c => {
     if (c.sec) grupos.push({ sec: c.sec, items: [] });
     else { if (!grupos.length) grupos.push({ sec: null, items: [] }); grupos[grupos.length - 1].items.push(c); }
   });
@@ -1311,6 +1347,8 @@ async function vFicha(main, id) {
   if (!a) { main.innerHTML = `<div class="card empty">No encontré el artículo <b>${esc(id)}</b>. <a href="#/catalogo">Volver</a></div>`; return; }
   const venta = S.ventas.find(v => v.articulo_id === id);
   const cargos = S.cargos.filter(c => c.articulo_id === id);
+  const qp = quienPago(a), varios = unicos(Object.values(qp).filter(Boolean)).length > 1 || !!(a.envio_pagado_por || a.impuestos_pagado_por || a.otros_pagado_por || a.paquete_pagado_por);
+  const quienTag = g => varios && g ? ` <span class="quien" style="--qc:${colorPersona(g)}">${esc(nombreP(g))}</span>` : "";
   const paq = S.paquetes.find(p => p.numero === a.paquete_numero);
   const enPaq = paq ? S.articulos.filter(x => x.paquete_numero === paq.numero) : [];
   const ests = S.estatus;
@@ -1341,10 +1379,10 @@ async function vFicha(main, id) {
     </div>
     <div>
       <div class="card"><h2>Costos</h2><dl class="kv">
-        <dt>Artículo</dt><dd>${fmt.money(a.pago_mxn)}${a.precio_jpy ? ` <span class="mute">(${fmt.jpy(a.precio_jpy)})</span>` : ""}</dd>
-        <dt>Envío internacional ${a.envio_prorrateado ? '<span class="tag">prorrateado</span>' : ""}</dt><dd>${fmt.money(a.envio_mxn_efectivo)}</dd>
-        <dt>Impuestos</dt><dd>${fmt.money(a.impuestos_mxn)}</dd>
-        ${Number(a.otros_costos_mxn) ? `<dt>Otros</dt><dd>${fmt.money(a.otros_costos_mxn)}</dd>` : ""}
+        <dt>Artículo${quienTag(qp.art)}</dt><dd>${fmt.money(a.pago_mxn)}${a.precio_jpy ? ` <span class="mute">(${fmt.jpy(a.precio_jpy)})</span>` : ""}</dd>
+        <dt>Envío internacional${Number(a.envio_mxn_efectivo) ? quienTag(qp.env) : ""} ${a.envio_prorrateado ? '<span class="tag">prorrateado</span>' : ""}</dt><dd>${fmt.money(a.envio_mxn_efectivo)}</dd>
+        <dt>Impuestos${Number(a.impuestos_mxn) ? quienTag(qp.imp) : ""}</dt><dd>${fmt.money(a.impuestos_mxn)}</dd>
+        ${Number(a.otros_costos_mxn) ? `<dt>Otros${quienTag(qp.otr)}</dt><dd>${fmt.money(a.otros_costos_mxn)}</dd>` : ""}
       </dl><div class="total"><span>Costo total</span><span class="num">${fmt.money(a.costo_total)}</span></div>
       ${a.tc_mxn_por_jpy ? `<div class="mute" style="font-size:12px;margin-top:6px">TC implícito ${a.tc_mxn_por_jpy} MXN/¥</div>` : ""}</div>
 
@@ -1367,7 +1405,7 @@ async function vFicha(main, id) {
       <div class="card sec"><h2>Compra</h2><dl class="kv">
         <dt>Vendedor</dt><dd>${esc(a.vendedor || "—")}</dd>
         <dt>Orden</dt><dd>${esc(a.orden_compra || "—")}</dd><dt>Fecha</dt><dd>${fmt.date(a.fecha_compra)}</dd>
-        <dt>Pagado por</dt><dd>${esc(a.pagado_por || "—")}</dd>
+        <dt>Pagado por</dt><dd>${esc(quienesPagaron([a]) || a.pagado_por || "—")}</dd>
         ${a.precio_usd ? `<dt>Precio USD</dt><dd>${fmt.usd(a.precio_usd)}</dd>` : ""}
         ${a.categoria ? `<dt>Categoría</dt><dd>${esc(a.categoria)}</dd>` : ""}
         ${a.color ? `<dt>Color</dt><dd>${puntoColor(a.color)}</dd>` : ""}
@@ -1406,14 +1444,14 @@ async function vFicha(main, id) {
   $("[data-cot]") && ($("[data-cot]").onclick = () => { verCot(true); scrollTo(0, 0); });
   $("#evta") && ($("#evta").onclick = () => abrirForm("ventas", venta, {}, () => render()));
   $("#epaq") && ($("#epaq").onclick = () => abrirForm("paquetes", paq, {}, () => render()));
-  $("#ncargo").onclick = () => abrirForm("cargos_tc", null, { articulo_id: id, fecha: new Date().toISOString().slice(0, 10) }, () => render());
+  $("#ncargo").onclick = () => abrirForm("cargos_tc", null, { articulo_id: id, fecha: new Date().toISOString().slice(0, 10), pagado_por: S.sinQuien ? undefined : qp.art || undefined }, () => render());
   $("#est").onchange = async e => {
     const { error } = await sb.from("articulos").update({ estatus: e.target.value }).eq("id", id);
     if (error) return toast(errMsg(error), true);
     toast("Estatus actualizado ✓"); await cargarTodo(); render();
   };
   tabla($("#tc"), { filas: cargos, clave: "tc_a", totales: ["monto_mxn"], alClick: c => abrirForm("cargos_tc", c, {}, () => render()), cols: [
-    { k: "fecha", l: "Fecha", f: fmt.date }, { k: "concepto", l: "Concepto" },
+    { k: "fecha", l: "Fecha", f: fmt.date }, { k: "concepto", l: "Concepto", h: r => `${esc(r.concepto)}${r.pagado_por ? ` <span class="quien" style="--qc:${colorPersona(r.pagado_por)}">${esc(nombreP(r.pagado_por))}</span>` : ""}` },
     { k: "estado", l: "Estado", h: r => `<span class="pill ${r.estado === "PAGADO" ? "c-green" : "c-amber"}">${r.estado === "PAGADO" ? "Pagado" : "Pendiente"}</span>` },
     { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money },
   ] });
@@ -1624,6 +1662,7 @@ function vCargos(main) {
     { k: "fecha", l: "Fecha", f: fmt.date },
     { k: "concepto", l: "Concepto", h: r => `${esc(r.concepto)}${r.es_personal ? ' <span class="pill c-gray">Personal</span>' : ""}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>` },
     { k: "articulo_id", l: "Artículo", v: r => artDe(r.articulo_id)?.nombre, h: r => r.articulo_id ? `<a href="#/a/${esc(r.articulo_id)}">${esc(artDe(r.articulo_id)?.nombre || r.articulo_id)}</a>` : "—" },
+    { k: "pagado_por", l: "Quién", h: r => r.pagado_por ? `<span class="quien" style="--qc:${colorPersona(r.pagado_por)}">${esc(nombreP(r.pagado_por))}</span>` : "—" },
     { k: "tarjeta", l: "Tarjeta", hm: 1, h: r => esc([r.tarjeta, r.banco].filter(Boolean).join(" · ") || "—") },
     { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money },
     { k: "estado", l: "Estado", h: r => r.estado === "PAGADO" ? `<span class="pill c-green">Pagado</span>` : `<span class="pill c-amber">Pendiente</span> <button class="btn sm" data-pagar="${r.id}">Marcar pagado</button>` },
@@ -1695,13 +1734,16 @@ function calcularBalance(hastaMes, esUltimo) {
   const pagado = z(), costoVend = z(), costoInv = z(), gan = z(), recup = z(), nArt = z(), nVend = z();
   let sinFecha = 0;
   S.articulos.forEach(a => {
-    const g = clave(a), costo = Number(a.costo_total) || 0;
+    const costo = Number(a.costo_total) || 0;
     if (a.venta_id && !a.fecha_venta) sinFecha++;
     const vendido = a.venta_id && ok(a.fecha_venta);
     if (!ok(a.fecha_compra) && !vendido) return;
-    pagado[g] += costo; nArt[g]++;
-    if (vendido) { costoVend[g] += costo; gan[g] += Number(a.utilidad) || 0; recup[g] += Number(a.ingreso_neto) || 0; nVend[g]++; }
-    else costoInv[g] += costo;
+    // cada persona carga solo los costos que pagó (artículo, envío, impuestos, otros)
+    Object.entries(fracPago(a, pers)).forEach(([g, f]) => {
+      const c = costo * f; pagado[g] += c; nArt[g]++;
+      if (vendido) { costoVend[g] += c; gan[g] += (Number(a.utilidad) || 0) * f; recup[g] += (Number(a.ingreso_neto) || 0) * f; nVend[g]++; }
+      else costoInv[g] += c;
+    });
   });
   const dest = {};
   S.movs.filter(m => !m.origen && ok(m.fecha)).forEach(m => { dest[m.destino] = (dest[m.destino] || 0) + Number(m.monto_mxn); });
@@ -1779,9 +1821,9 @@ function modeloGlobal(B, sels = []) {
   const gDe = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
   const its = sels.map(a => {
     const vend = !!(a.venta_id && B.ok(a.fecha_venta)), incl = B.ok(a.fecha_compra) || vend;
-    return incl ? { a, g: gDe(a), costo: Number(a.costo_total) || 0, vend, gan: vend ? Math.max(0, Number(a.utilidad) || 0) : 0 } : null;
+    return incl ? { a, g: gDe(a), fr: fracPago(a, pers), costo: Number(a.costo_total) || 0, vend, gan: vend ? Math.max(0, Number(a.utilidad) || 0) : 0 } : null;
   }).filter(Boolean);
-  const porG = g => its.filter(x => x.g === g);
+  const porG = g => its.filter(x => x.fr[g]).map(x => ({ vend: x.vend, costo: x.costo * x.fr[g], gan: x.gan * x.fr[g] }));
   const P = B.grupos.map(g => ({ id: "p:" + g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: B.pagado[g],
     info: `<b>${esc(nombreP(g))}</b> ha pagado <b>${fmt.money(B.pagado[g])}</b> en ${B.nArt[g]} artículos (costo + envío + impuestos) · ${B.nVend[g]} ya vendidos.` }));
   const ganTot = Math.max(0, B.totGan);
@@ -1861,9 +1903,9 @@ function modeloGlobal(B, sels = []) {
     else {
       const titulo = its.length === 1 ? `<b>${esc(its[0].a.nombre)}</b>` : `<b>${its.length} artículos</b>`;
       const pag = sum(its, x => x.costo), gan = sum(its, x => x.gan), nv = its.filter(x => x.vend).length;
-      const quien = unicos(its.map(x => nombreP(x.g))).join(" y ");
+      const quien = quienesPagaron(its.map(x => x.a));
       const destTxt = destinosLista().filter(d => destItems[d] > 0.5).map(d => `${esc(d)} ${fmt.money0(destItems[d])}`).join(" · ");
-      hlInfo = `${titulo}: ${esc(quien)} pagó ${fmt.money(pag)}${nv ? ` · ganancia ${fmt.money(gan)}` : ""}${nv < its.length ? ` · ${its.length - nv} sin vender` : ""}. `
+      hlInfo = `${titulo}: ${esc(quien)} ${quien.includes(" y ") ? "pagaron" : "pagó"} ${fmt.money(pag)}${nv ? ` · ganancia ${fmt.money(gan)}` : ""}${nv < its.length ? ` · ${its.length - nv} sin vender` : ""}. `
         + (nv ? (destTxt ? `El dinero fue a: ${destTxt}${restoItems > 0.5 ? ` · ${fmt.money0(restoItems)} sigue disponible` : ""}.` : `Aún sin amarrar a movimientos: ${fmt.money0(restoItems)} cuentan como disponible (${fmt.money0(restoItems - restoGItems)} de costo + ${fmt.money0(restoGItems)} de ganancia).`) : "");
     }
   }
@@ -1907,16 +1949,17 @@ function modeloArticulos(arts) {
   const pers = pagadores(), uno = arts.length === 1;
   const gDe = a => pers.includes((a.pagado_por || "").toUpperCase()) ? (a.pagado_por || "").toUpperCase() : "";
   const links = [], link = (s, t, v0, v1) => { if (v0 > 0.005 || v1 > 0.005) links.push({ s, t, v0, v1 }); };
-  const COMP = [["Artículo", a => Number(a.pago_mxn) || 0, C_AHO], ["Envío internacional", a => Number(a.envio_mxn_efectivo) || 0, C_INV],
-    ["Impuestos", a => Number(a.impuestos_mxn) || 0, C_COSTO], ["Otros costos", a => Number(a.otros_costos_mxn) || 0, C_OTROS]];
+  const COMP = [["Artículo", a => Number(a.pago_mxn) || 0, C_AHO, "art"], ["Envío internacional", a => Number(a.envio_mxn_efectivo) || 0, C_INV, "env"],
+    ["Impuestos", a => Number(a.impuestos_mxn) || 0, C_COSTO, "imp"], ["Otros costos", a => Number(a.otros_costos_mxn) || 0, C_OTROS, "otr"]];
   const costoDe = a => Number(a.costo_total) || 0;
   // 1. quién pagó
-  const grupos = unicos(arts.map(gDe).map(g => g || "·")).map(g => g === "·" ? "" : g);
-  const P0 = grupos.map(g => { const mis = arts.filter(a => gDe(a) === g), v = sum(mis, costoDe);
-    return { id: "q:" + g, g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: v, info: `<b>${esc(nombreP(g))}</b> pagó ${fmt.money(v)}${uno ? " por esta pieza" : ` por ${mis.length} piezas`} (artículo + envío + impuestos).` }; }).filter(n => n.value > 0.5);
+  const grupos = unicos(arts.flatMap(a => Object.keys(partesPago(a, pers))).map(g => g || "·")).map(g => g === "·" ? "" : g);
+  const P0 = grupos.map(g => { const mis = arts.filter(a => (partesPago(a, pers)[g] || 0) > 0), v = sum(arts, a => partesPago(a, pers)[g] || 0);
+    return { id: "q:" + g, g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: v, info: `<b>${esc(nombreP(g))}</b> pagó ${fmt.money(v)}${uno ? " de esta pieza" : ` de ${mis.length} piezas`}: ${COMP.filter(([, f, , k]) => sum(arts.filter(a => quienPago(a, pers)[k] === g), f) > 0.5).map(([l]) => l.toLowerCase()).join(", ")}.` }; }).filter(n => n.value > 0.5);
   // 2. componentes del costo
-  const C1 = COMP.map(([l, f, c]) => { const v = sum(arts, f); return { id: "c:" + l, label: l, color: c, value: v, f, info: `<b>${l}</b>: ${fmt.money(v)}.` }; }).filter(n => n.value > 0.5);
-  P0.forEach(p => C1.forEach(c => { const v = sum(arts.filter(a => gDe(a) === p.g), c.f); link(p, c, v, v); }));
+  const C1 = COMP.map(([l, f, c, k]) => { const v = sum(arts, f), q = unicos(arts.filter(f).map(a => nombreP(quienPago(a, pers)[k]))).join(" y ");
+    return { id: "c:" + l, label: l, color: c, value: v, f, k, info: `<b>${l}</b>: ${fmt.money(v)}${q ? ` · lo pagó ${esc(q)}` : ""}.` }; }).filter(n => n.value > 0.5);
+  P0.forEach(p => C1.forEach(c => { const v = sum(arts.filter(a => quienPago(a, pers)[c.k] === p.g), c.f); link(p, c, v, v); }));
   // 3. venta / sin vender
   const vend = arts.filter(a => a.venta_id), sinV = arts.filter(a => !a.venta_id);
   const precio = sum(vend, a => Number(a.precio_venta) || 0);
@@ -1933,13 +1976,13 @@ function modeloArticulos(arts) {
   // 4. reparto de la venta
   const datos = vend.map(a => {
     const pr = Number(a.precio_venta) || 0, com = Number(a.comision_mxn) || 0, env = Number(a.envio_venta_mxn) || 0, neto = pr - com - env, c = costoDe(a);
-    return { a, g: gDe(a), com, env, repone: Math.max(0, Math.min(c, neto)), gan: Math.max(0, neto - c), perd: Math.max(0, c - neto) };
+    return { a, g: gDe(a), fr: fracPago(a, pers), com, env, repone: Math.max(0, Math.min(c, neto)), gan: Math.max(0, neto - c), perd: Math.max(0, c - neto) };
   });
   const perd = sum(datos, d => d.perd);
   const R = [
     { id: "r:com", label: "Comisión", color: C_OTROS, value: sum(datos, d => d.com), info: `Comisiones de la plataforma: ${fmt.money(sum(datos, d => d.com))}.` },
     { id: "r:env", label: "Envío local", color: C_INV, value: sum(datos, d => d.env), info: `Envíos al cliente: ${fmt.money(sum(datos, d => d.env))}.` },
-    ...unicos(datos.map(d => d.g || "·")).map(g => g === "·" ? "" : g).map(g => { const v = sum(datos.filter(d => d.g === g), d => d.repone);
+    ...unicos(datos.flatMap(d => Object.keys(d.fr)).map(g => g || "·")).map(g => g === "·" ? "" : g).map(g => { const v = sum(datos, d => d.repone * (d.fr[g] || 0));
       return { id: "r:rep:" + g, g, label: `Repone tarjeta ${nombreP(g)}`, color: g ? colorPersona(g) : VIZ_GRIS, value: v, info: `<b>${fmt.money(v)}</b> regresan para cubrir lo que pagó ${esc(nombreP(g))}${perd ? ` (faltaron ${fmt.money(perd)}: hubo pérdida)` : ""}.` }; }),
     { id: "r:gan", label: "Ganancia", color: C_GAN, value: sum(datos, d => d.gan), info: `<b>${fmt.money(sum(datos, d => d.gan))}</b> de ganancia${uno ? ` · margen ${fmt.pct(vend[0].margen)}` : ""}.` },
   ].filter(n => n.value > 0.5);
@@ -1954,10 +1997,11 @@ function modeloArticulos(arts) {
     const A = asignarPieza(d.repone, d.gan, destinosLista().filter(x => rp[x] > 0.5).map(x => [x, rp[x]]));
     A.out.forEach(o => {
       let queda = 1;
-      Object.entries(TF[o.d] || {}).forEach(([y, p]) => { p = Math.min(p, queda); queda -= p; flujos.push({ g: d.g, d: y, c: o.c * p, gg: o.g * p, via: o.d }); D[y] = (D[y] || 0) + (o.c + o.g) * p; });
-      flujos.push({ g: d.g, d: o.d, c: o.c * queda, gg: o.g * queda }); D[o.d] = (D[o.d] || 0) + (o.c + o.g) * queda;
+      const pon = (y, p, via) => Object.entries(d.fr).forEach(([g, f]) => flujos.push({ g, d: y, c: o.c * p * f, gg: o.g * p * f, via }));
+      Object.entries(TF[o.d] || {}).forEach(([y, p]) => { p = Math.min(p, queda); queda -= p; pon(y, p, o.d); D[y] = (D[y] || 0) + (o.c + o.g) * p; });
+      pon(o.d, queda); D[o.d] = (D[o.d] || 0) + (o.c + o.g) * queda;
     });
-    restoC[d.g] = (restoC[d.g] || 0) + A.restoC; restoG += A.restoG;
+    Object.entries(d.fr).forEach(([g, f]) => { restoC[g] = (restoC[g] || 0) + A.restoC * f; }); restoG += A.restoG;
   });
   const DN = destinosLista().filter(d => D[d] > 0.5).map(d => {
     const via = unicos(flujos.filter(f => f.d === d && f.via).map(f => f.via)).map(o => `${fmt.money0(sum(flujos.filter(f => f.d === d && f.via === o), f => f.c + f.gg))} vía ${esc(o)}`).join(" · ");
@@ -2088,7 +2132,7 @@ function vBalance(main) {
       dibujarSankey($("#sk"), mod, $("#si")); leyenda(mod.cols);
       const vend = arts.filter(x => x.venta_id), precio = sum(vend, x => x.precio_venta), util = sum(vend, x => x.utilidad);
       const com = sum(vend, x => (Number(x.comision_mxn) || 0) + (Number(x.envio_venta_mxn) || 0));
-      const quien = unicos(arts.map(x => nombreP((x.pagado_por || "").toUpperCase()))).join(" y ");
+      const quien = quienesPagaron(arts);
       $("#bk").innerHTML = kpi("Costo total", fmt.money0(sum(arts, x => x.costo_total)), `Pagado por ${esc(quien)}`)
         + kpi("Precio de venta", vend.length ? fmt.money0(precio) : "—", uno ? (a.venta_id ? fmt.date(a.fecha_venta) : "Aún sin vender") : `${vend.length} de ${arts.length} vendidas`)
         + kpi("Comisión + envío", vend.length ? fmt.money0(com) : "—", uno ? (a.canal_venta || "") : "")
