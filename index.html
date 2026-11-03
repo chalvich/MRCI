@@ -721,13 +721,21 @@ const MOD = {
     tabla: "movimientos", pk: "id", titulo: "movimiento",
     campos: [
       F("fecha", "Fecha", "date", { req: 1, def: () => new Date().toISOString().slice(0, 10) }),
+      F("origen", "¿De dónde sale el dinero?", "select", { opts: () => destinosLista().map(d => [d, `Saldo de ${d}`]), vacio: "Ventas (dinero recuperado)", hint: "Ej. si pagas la tarjeta con lo que tenías en Ahorro, elige «Saldo de Ahorro»" }),
       F("destino", "Destino", "select", { req: 1, opts: () => destinosLista().map(d => [d, d]) }),
       F("monto_mxn", "Monto (MXN)", "money", { req: 1 }),
       F("descripcion", "Descripción", "textarea", { full: 1, hint: "Ej. pago de tarjeta Santander de octubre" }),
-      F("articulos", "¿De qué ventas salió este dinero?", "articulos", { full: 1, hint: "Opcional. El monto se reparte solo entre las piezas, según lo que dejó cada venta." }),
+      F("articulos", "¿De qué ventas salió este dinero?", "articulos", { full: 1, visibleSi: v => !v.origen, hint: "Opcional. El monto se reparte solo entre las piezas, según lo que dejó cada venta." }),
     ],
-    calc(v) {
+    async antes(v) { if (v.origen && v.origen === v.destino) throw new Error("El origen y el destino no pueden ser el mismo."); if (v.origen) v.articulos = []; },
+    calc(v, reg) {
       const ids = v.articulos || [], monto = n0(v.monto_mxn);
+      if (v.origen) {
+        if (v.origen === v.destino) return `<span class="warn">El origen y el destino no pueden ser el mismo.</span>`;
+        const saldo = saldoDestino(v.origen, reg?.id);
+        return `Saldo en <b>${esc(v.origen)}</b>: ${fmt.money(saldo)}. Las piezas que estaban ahí siguen este traspaso en proporción.`
+          + (monto > saldo + 0.5 ? `<br><span class="warn">El monto es mayor al saldo de ${esc(v.origen)}.</span>` : "");
+      }
       if (!ids.length) return "";
       const pesos = ids.map(id => Math.max(0, Number(artDe(id)?.ingreso_neto) || 0)), tot = sum(pesos, x => x);
       if (!monto) return `${ids.length} venta(s) seleccionada(s) · recuperaron ${fmt.money(tot)}. Escribe el monto para ver el reparto.`;
@@ -793,7 +801,7 @@ function inputDe(c, val, base = {}) {
 function opcionesSelect(c, v, base = {}) {
   const ops = c.src ? fuentes[c.src]() : c.opts(base);
   if (v != null && v !== "" && !ops.some(([k]) => String(k) === String(v))) ops.push([v, v]);
-  return `<option value="">—</option>${ops.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(v ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("")}${c.nueva ? `<option value="__nueva">＋ Nueva ${esc(c.nueva)}…</option>` : ""}`;
+  return `<option value="">${esc(c.vacio || "—")}</option>${ops.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(v ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("")}${c.nueva ? `<option value="__nueva">＋ Nueva ${esc(c.nueva)}…</option>` : ""}`;
 }
 
 function leerForm(form, campos) {
@@ -873,7 +881,9 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
       const r = M.auto(valoresCrudos(form, M.campos), campo);
       if (r) Object.entries(r).forEach(([k, val]) => { if (!tocado.has(k) && form.elements[k]) form.elements[k].value = val; });
     }
-    if (M.calc) calc.innerHTML = M.calc(valoresCrudos(form, M.campos), registro) || "";
+    const vals = valoresCrudos(form, M.campos);
+    M.campos.filter(c => c.visibleSi).forEach(c => { const f = (form.elements[c.k] || $(`[data-arts="${c.k}"]`, form))?.closest(".fld"); if (f) f.classList.toggle("hidden", !c.visibleSi(vals)); });
+    if (M.calc) calc.innerHTML = M.calc(vals, registro) || "";
   };
   form.addEventListener("input", e => { if (e.isTrusted && e.target.name && M.campos.find(c => c.k === e.target.name)?.auto) tocado.add(e.target.name); refrescar(e.target.name); });
   form.addEventListener("change", e => refrescar(e.target.name));
@@ -1337,7 +1347,7 @@ async function vFicha(main, id) {
         ${venta.cliente ? `<dt>Cliente</dt><dd>${esc(venta.cliente)}${venta.destino ? ` · ${esc(venta.destino)}` : ""}</dd>` : ""}
         ${venta.guia || venta.paqueteria ? `<dt>Envío</dt><dd>${esc([venta.paqueteria, venta.guia].filter(Boolean).join(" "))}</dd>` : ""}
         <dt>Depósito</dt><dd>${venta.fecha_deposito ? `${fmt.date(venta.fecha_deposito)} · ${fmt.money(venta.monto_depositado)}` : '<span class="warn">Pendiente</span>'}</dd>
-        ${textoReparto(repartoMovs().get(a.id)) ? `<dt>Dinero fue a</dt><dd>${textoReparto(repartoMovs().get(a.id))}</dd>` : ""}
+        ${textoReparto(repartoFinal(a.id)) ? `<dt>Dinero fue a</dt><dd>${textoReparto(repartoFinal(a.id))}</dd>` : ""}
       </dl><div class="total"><span>Utilidad</span><span class="num ${signo(a.utilidad)}">${fmt.money(a.utilidad)} · ${fmt.pct(a.margen)}</span></div>
       ${!S.sinMovs ? `<button class="btn sm" id="aMov" style="margin-top:12px;width:100%">➜ Registrar a dónde se fue el dinero</button>` : ""}`
       : `<div class="mute">Aún sin vender.</div>
@@ -1684,7 +1694,7 @@ function calcularBalance(hastaMes, esUltimo) {
     else costoInv[g] += costo;
   });
   const dest = {};
-  S.movs.filter(m => ok(m.fecha)).forEach(m => { dest[m.destino] = (dest[m.destino] || 0) + Number(m.monto_mxn); });
+  S.movs.filter(m => !m.origen && ok(m.fecha)).forEach(m => { dest[m.destino] = (dest[m.destino] || 0) + Number(m.monto_mxn); });
   const t = o => sum(grupos, g => o[g]);
   const totRec = t(recup), totDest = sum(Object.keys(dest), k => dest[k]);
   return { grupos: grupos.filter(g => pagado[g]), pagado, costoVend, costoInv, gan, recup, nArt, nVend, dest, sinFecha,
@@ -1698,7 +1708,7 @@ function repartoMovs(ok = () => true) {
   const res = new Map();
   S.movs.forEach(m => {
     const ids = (m.articulos || []).filter(id => artDe(id));
-    if (!ids.length || !ok(m.fecha)) return;
+    if (m.origen || !ids.length || !ok(m.fecha)) return;
     const pesos = ids.map(id => Math.max(0, Number(artDe(id).ingreso_neto) || 0)), tot = sum(pesos, x => x);
     ids.forEach((id, i) => {
       const parte = Number(m.monto_mxn) * (tot ? pesos[i] / tot : 1 / ids.length);
@@ -1719,6 +1729,36 @@ function asignarPieza(costo, gan, dests) {
   });
   return { out, restoC: pc, restoG: pg };
 }
+/* Traspasos: movimientos con origen (ej. Ahorro → Pago tarjeta CG).
+   f[origen][destino] = fracción de lo que entró al origen que después se fue a ese destino. */
+function fraccionesTraspaso(ok = () => true) {
+  const ent = {}, sal = {};
+  S.movs.filter(m => ok(m.fecha)).forEach(m => {
+    const x = Number(m.monto_mxn) || 0;
+    if (m.origen) { sal[m.origen] ||= {}; sal[m.origen][m.destino] = (sal[m.origen][m.destino] || 0) + x; }
+    else ent[m.destino] = (ent[m.destino] || 0) + x;
+  });
+  const f = {};
+  Object.keys(sal).forEach(o => {
+    const tot = sum(Object.values(sal[o]), v => v), base = Math.max(ent[o] || 0, tot);
+    f[o] = {}; Object.keys(sal[o]).forEach(d => { f[o][d] = base ? sal[o][d] / base : 0; });
+  });
+  return { f, ent, sal };
+}
+// Reparto de una pieza después de aplicar traspasos (destino final)
+function aplicarTraspasos(rep, f) {
+  const out = {};
+  Object.entries(rep || {}).forEach(([d, x]) => {
+    let queda = x;
+    Object.entries(f[d] || {}).forEach(([y, p]) => { out[y] = (out[y] || 0) + x * p; queda -= x * p; });
+    out[d] = (out[d] || 0) + queda;
+  });
+  return out;
+}
+function saldoDestino(d, excluirId = null) {
+  return sum(S.movs.filter(m => m.id !== excluirId), m => (m.destino === d ? Number(m.monto_mxn) : 0) - (m.origen === d ? Number(m.monto_mxn) : 0));
+}
+const repartoFinal = id => { const r = repartoMovs().get(id); return r ? aplicarTraspasos(r, fraccionesTraspaso().f) : null; };
 const textoReparto = rep => Object.keys(rep || {}).length ? destinosLista().filter(d => rep[d] > 0.5).map(d => `${esc(d)} ${fmt.money0(rep[d])}`).join(" · ") : "";
 
 /* Modelo global: Pagado (CG/Chava) → Resultado (inventario · costo recuperado · ganancia) → Destino (movimientos)
@@ -1817,6 +1857,38 @@ function modeloGlobal(B, sels = []) {
         + (nv ? (destTxt ? `El dinero fue a: ${destTxt}${restoItems > 0.5 ? ` · ${fmt.money0(restoItems)} sigue disponible` : ""}.` : `Aún sin amarrar a movimientos: ${fmt.money0(restoItems)} cuentan como disponible (${fmt.money0(restoItems - restoGItems)} de costo + ${fmt.money0(restoGItems)} de ganancia).`) : "");
     }
   }
+  // Traspasos (ej. Ahorro → Pago tarjeta CG): 4a columna con el destino final
+  const TF = fraccionesTraspaso(B.ok).f;
+  if (Object.keys(TF).some(o => D.some(n => n.id === "d:" + o))) {
+    const FN = {}, l4 = [];
+    const nodoF = (name, color) => (FN[name] ||= { id: "f:" + name, label: name, color, value: 0, vias: {} });
+    D.forEach(n => {
+      const name = n.id === "d:disp" ? "Disponible" : n.label, fr = n.id === "d:disp" ? {} : (TF[name] || {});
+      const salidas = Object.entries(fr).map(([y, p]) => [y, n.value * Math.min(1, p)]).filter(([, x]) => x > 0.5);
+      const queda = n.value - sum(salidas, x => x[1]);
+      if (salidas.length) n.info += ` Después salieron ${salidas.map(([y, x]) => `${fmt.money0(x)} a ${esc(y)}`).join(" y ")}.`;
+      if (queda > 0.5) { const t = nodoF(name, n.color); t.value += queda; l4.push({ s: n, t, x: queda }); }
+      salidas.forEach(([y, x]) => { const t = nodoF(y, colorDestino(y)); t.value += x; t.vias[name] = (t.vias[name] || 0) + x; l4.push({ s: n, t, x }); });
+    });
+    const itemIn = {}; links.filter(l => l.hl).forEach(l => { itemIn[l.t.id] = (itemIn[l.t.id] || 0) + l.v1; });
+    l4.forEach(l => {
+      const hp = l.s.value ? (itemIn[l.s.id] || 0) * l.x / l.s.value : 0, r = l.x - hp;
+      if (hp > 0.5) links.push({ s: l.s, t: l.t, v0: hp, v1: hp, hl: true });
+      if (r > 0.5) links.push({ s: l.s, t: l.t, v0: r, v1: r });
+    });
+    const orden = [...destinosLista(), "Disponible"];
+    const F4 = Object.values(FN).sort((a, b) => orden.indexOf(a.label) - orden.indexOf(b.label));
+    F4.forEach(n => {
+      const via = Object.entries(n.vias).map(([o, x]) => `${fmt.money0(x)} vía ${esc(o)}`).join(" · ");
+      n.info = `<b>${esc(n.label)}</b>: ${fmt.money(n.value)} al final${via ? ` (incluye ${via})` : ""}${n.label === "Ahorro" ? " · es el saldo que sigue ahorrado" : ""}.`;
+    });
+    if (sels.length && its.some(x => x.vend)) {
+      const fin = aplicarTraspasos(destItems, TF);
+      if (Object.keys(fin).some(k => !destItems[k] || Math.abs(fin[k] - destItems[k]) > 0.5))
+        hlInfo += ` Destino final: ${destinosLista().filter(d => fin[d] > 0.5).map(d => `${esc(d)} ${fmt.money0(fin[d])}`).join(" · ")}.`;
+    }
+    return { headers: ["Pagado", "Resultado", "Destino", "Destino final"], cols: [P, M, D, F4], links, hl: sels.length > 0, hlInfo };
+  }
   return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links, hl: sels.length > 0, hlInfo };
 }
 
@@ -1865,15 +1937,22 @@ function modeloArticulos(arts) {
   // 5. destino (movimientos amarrados)
   const rpAll = repartoMovs();
   if (!vend.some(a => rpAll.get(a.id))) return { headers: ["Pagó", "Costo", "Venta", "Reparto"], cols: [P0, C1, C2, R], links };
-  const nGan = R.find(r => r.id === "r:gan"), D = {}, flujos = [];
+  const nGan = R.find(r => r.id === "r:gan"), D = {}, flujos = [], TF = fraccionesTraspaso().f;
   let restoC = {}, restoG = 0;
   datos.forEach(d => {
     const rp = rpAll.get(d.a.id) || {};
     const A = asignarPieza(d.repone, d.gan, destinosLista().filter(x => rp[x] > 0.5).map(x => [x, rp[x]]));
-    A.out.forEach(o => { D[o.d] = (D[o.d] || 0) + o.c + o.g; flujos.push({ g: d.g, d: o.d, c: o.c, gg: o.g }); });
+    A.out.forEach(o => {
+      let queda = 1;
+      Object.entries(TF[o.d] || {}).forEach(([y, p]) => { p = Math.min(p, queda); queda -= p; flujos.push({ g: d.g, d: y, c: o.c * p, gg: o.g * p, via: o.d }); D[y] = (D[y] || 0) + (o.c + o.g) * p; });
+      flujos.push({ g: d.g, d: o.d, c: o.c * queda, gg: o.g * queda }); D[o.d] = (D[o.d] || 0) + (o.c + o.g) * queda;
+    });
     restoC[d.g] = (restoC[d.g] || 0) + A.restoC; restoG += A.restoG;
   });
-  const DN = destinosLista().filter(d => D[d] > 0.5).map(d => ({ id: "d:" + d, label: d, color: colorDestino(d), value: D[d], info: `<b>${fmt.money(D[d])}</b> se fueron a <b>${esc(d)}</b> (reparto automático de los movimientos).` }));
+  const DN = destinosLista().filter(d => D[d] > 0.5).map(d => {
+    const via = unicos(flujos.filter(f => f.d === d && f.via).map(f => f.via)).map(o => `${fmt.money0(sum(flujos.filter(f => f.d === d && f.via === o), f => f.c + f.gg))} vía ${esc(o)}`).join(" · ");
+    return { id: "d:" + d, label: d, color: colorDestino(d), value: D[d], info: `<b>${fmt.money(D[d])}</b> terminaron en <b>${esc(d)}</b>${via ? ` (incluye ${via})` : ""}.` };
+  });
   const restoTot = sum(Object.values(restoC), x => x) + restoG;
   if (restoTot > 0.5) DN.push({ id: "d:disp", label: "Sin asignar", color: VIZ_GRIS, value: restoTot, info: `<b>${fmt.money(restoTot)}</b> todavía no se asignan a ningún movimiento.` });
   const nodoD = d => DN.find(n => n.id === "d:" + d);
@@ -2072,20 +2151,21 @@ function vMovimientos(main) {
   main.innerHTML = `<div class="sec-h" style="margin-bottom:14px;gap:12px"><div style="min-width:0"><h1>Movimientos</h1><p class="sub hide-m" style="margin:0">Pagos de tarjeta, ahorro y otros destinos del dinero recuperado</p></div>
     <div style="display:flex;gap:8px;flex:none"><button class="btn hide-m" id="csv">CSV</button><button class="btn pri" id="nuevo">+ <span class="hide-m">Movimiento</span><span class="show-m">Nuevo</span></button></div></div>
     ${S.sinMovs ? `<div class="cot-msg mid" style="margin:0 0 14px">Falta crear la tabla: corre <b>sql/04_movimientos.sql</b> en Supabase y recarga.</div>` : ""}
-    <div class="chips">${[["", "Todos"], ...destinosLista().map(d => [d, d])].map(([k, l]) => `<button class="chip${st.dest === k ? " on" : ""}" data-d="${esc(k)}">${k ? `<i class="dot-c" style="background:${colorDestino(k)}"></i>` : ""}${esc(l)}<b>${fmt.money0(sum(S.movs.filter(m => !k || m.destino === k), m => m.monto_mxn))}</b></button>`).join("")}</div>
+    <div class="chips">${[["", "Todos"], ...destinosLista().map(d => [d, d])].map(([k, l]) => `<button class="chip${st.dest === k ? " on" : ""}" data-d="${esc(k)}">${k ? `<i class="dot-c" style="background:${colorDestino(k)}"></i>` : ""}${esc(l)}<b>${fmt.money0(k ? saldoDestino(k) : sum(S.movs.filter(m => !m.origen), m => m.monto_mxn))}</b></button>`).join("")}</div>
     <div id="l"></div>`;
   const cols = [
     { k: "fecha", l: "Fecha", f: fmt.date },
-    { k: "destino", l: "Destino", h: r => `<span class="dot-c" style="background:${colorDestino(r.destino)}"></span>${esc(r.destino)}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>${(r.articulos || []).length ? `<div style="font-size:11.5px;color:var(--accent)">🔗 ${esc(r.articulos.map(id => artDe(id)?.nombre || id).join(", "))}</div>` : ""}` },
+    { k: "destino", l: "Destino", h: r => `${r.origen ? `<span class="mute">${esc(r.origen)} → </span>` : ""}<span class="dot-c" style="background:${colorDestino(r.destino)}"></span>${esc(r.destino)}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>${(r.articulos || []).length ? `<div style="font-size:11.5px;color:var(--accent)">🔗 ${esc(r.articulos.map(id => artDe(id)?.nombre || id).join(", "))}</div>` : ""}` },
     { k: "creado_por", l: "Registró", hm: 1, h: r => esc((r.creado_por || "").split("@")[0]) },
-    { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money },
+    { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money, h: r => r.origen && st.dest === r.origen ? `<span style="color:var(--bad,#e66767)">−${fmt.money(r.monto_mxn)}</span>` : fmt.money(r.monto_mxn),
+      v: r => !st.dest ? (r.origen ? 0 : Number(r.monto_mxn)) : (r.destino === st.dest ? 1 : 0) * r.monto_mxn - (r.origen === st.dest ? 1 : 0) * r.monto_mxn },
   ];
-  const filtrar = () => S.movs.filter(m => !st.dest || m.destino === st.dest);
+  const filtrar = () => S.movs.filter(m => !st.dest || m.destino === st.dest || m.origen === st.dest);
   const pinta = () => tabla($("#l"), { filas: filtrar(), cols, clave: "movs", totales: ["monto_mxn"], alClick: m => abrirForm("movimientos", m) });
   pinta();
   $$("[data-d]", main).forEach(b => b.onclick = () => { st.dest = b.dataset.d; $$("[data-d]", main).forEach(x => x.classList.toggle("on", x === b)); pinta(); });
   $("#nuevo").onclick = () => S.sinMovs ? toast("Primero corre sql/04_movimientos.sql en Supabase", true) : abrirForm("movimientos", null, st.dest ? { destino: st.dest } : {});
-  $("#csv").onclick = () => csv("movimientos", filtrar(), [["fecha", "Fecha"], ["destino", "Destino"], ["monto_mxn", "Monto"], ["descripcion", "Descripción"], ["creado_por", "Registró"]].map(([k, l]) => ({ k, l })));
+  $("#csv").onclick = () => csv("movimientos", filtrar(), [["fecha", "Fecha"], ["origen", "Origen"], ["destino", "Destino"], ["monto_mxn", "Monto"], ["descripcion", "Descripción"], ["creado_por", "Registró"]].map(([k, l]) => ({ k, l })));
 }
 
 /* ---------- HISTORIAL ---------- */
