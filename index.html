@@ -136,6 +136,9 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .sankey{width:100%;display:block;overflow:visible}
 .sankey .band{transition:opacity .15s}
 .sankey.foco .band:not(.on),.sankey.foco .node:not(.on){opacity:.15}
+.sankey.foco-item:not(.foco) .band:not(.hl){opacity:.1}
+.sankey.foco-item:not(.foco) .band.hl{fill-opacity:.9}
+.sankey.foco-item:not(.foco) .node:not(.hlN){opacity:.4}
 .sankey text{font-family:var(--sans);paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
 .sankey .lbl{fill:var(--text-soft);font-size:12px}
 .sankey .amt{fill:var(--text);font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
@@ -148,6 +151,16 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .bal-k{display:flex;flex-direction:column;gap:14px}
 .bal-k .kpi .v{font-size:26px}
 .art-sel{display:flex;flex-direction:column;gap:8px}
+.artsel{display:flex;flex-direction:column;gap:6px}
+.artsel-l{max-height:230px;overflow-y:auto;border:1px solid var(--line-strong);border-radius:10px;background:var(--bg2);overscroll-behavior:contain}
+.artsel-r{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.artsel-r:last-child{border-bottom:0}
+.artsel-r:has(input:checked){background:var(--accent-bg)}
+.artsel-r input{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.artsel-r span{flex:1;min-width:0;display:flex;flex-direction:column}
+.artsel-r b{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.artsel-r small{font-size:11.5px;color:var(--text-mute)}
+.artsel-r em{font-style:normal;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--text-soft);flex:none}
 .art-list{max-height:420px;overflow-y:auto;margin:0 -8px;display:flex;flex-direction:column;gap:2px;overscroll-behavior:contain}
 .art-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:8px;cursor:pointer;color:var(--text)}
 .art-row:hover{background:var(--card2)}
@@ -706,7 +719,16 @@ const MOD = {
       F("destino", "Destino", "select", { req: 1, opts: () => destinosLista().map(d => [d, d]) }),
       F("monto_mxn", "Monto (MXN)", "money", { req: 1 }),
       F("descripcion", "Descripción", "textarea", { full: 1, hint: "Ej. pago de tarjeta Santander de octubre" }),
+      F("articulos", "¿De qué ventas salió este dinero?", "articulos", { full: 1, hint: "Opcional. El monto se reparte solo entre las piezas, según lo que dejó cada venta." }),
     ],
+    calc(v) {
+      const ids = v.articulos || [], monto = n0(v.monto_mxn);
+      if (!ids.length) return "";
+      const pesos = ids.map(id => Math.max(0, Number(artDe(id)?.ingreso_neto) || 0)), tot = sum(pesos, x => x);
+      if (!monto) return `${ids.length} venta(s) seleccionada(s) · recuperaron ${fmt.money(tot)}. Escribe el monto para ver el reparto.`;
+      return `<b>Reparto automático:</b><br>` + ids.map((id, i) => `${esc(artDe(id)?.nombre || id)}: <b>${fmt.money(monto * (tot ? pesos[i] / tot : 1 / ids.length))}</b>`).join("<br>")
+        + (monto > tot + 0.5 ? `<br><span class="warn">El monto es mayor a lo que recuperaron esas ventas (${fmt.money(tot)}).</span>` : "");
+    },
   },
   marcas:  { tabla: "marcas",  pk: "id",     titulo: "marca",  campos: [F("nombre", "Nombre", "text", { req: 1, full: 1 })] },
   canales: { tabla: "canales", pk: "nombre", titulo: "canal de venta", campos: [
@@ -735,6 +757,14 @@ function inputDe(c, val, base = {}) {
       const sel = `<select class="in" id="${id}" name="${c.k}"${req}>${opcionesSelect(c, v, base)}</select>`;
       if (!c.nueva) return sel;
       return sel + `<div class="nueva hidden" data-nueva="${c.k}"><input class="in" placeholder="Nombre de la nueva ${esc(c.nueva)}" autocomplete="off"><button type="button" class="btn pri">Agregar</button></div>`;
+    }
+    case "articulos": {
+      const sel = new Set(Array.isArray(v) ? v : []);
+      const vend = S.articulos.filter(a => a.venta_id || sel.has(a.id))
+        .sort((x, y) => (sel.has(y.id) - sel.has(x.id)) || String(y.fecha_venta || "").localeCompare(String(x.fecha_venta || "")));
+      return `<div class="artsel" data-arts="${c.k}"><input class="in" type="search" placeholder="Buscar venta…" data-q autocomplete="off">
+        <div class="artsel-l">${vend.map(a => `<label class="artsel-r" data-n="${esc(norm(`${a.nombre} ${a.marca || ""} ${a.id}`))}"><input type="checkbox" data-art="${c.k}" value="${esc(a.id)}"${sel.has(a.id) ? " checked" : ""}>
+          <span><b>${esc(a.nombre)}</b><small>${esc(a.marca || "—")} · ${a.fecha_venta ? fmt.date(a.fecha_venta) : "sin fecha"}</small></span><em>${fmt.money0(a.ingreso_neto)}</em></label>`).join("") || '<div class="mute" style="padding:8px">No hay ventas registradas</div>'}</div></div>`;
     }
     case "color": {
       const actual = colorDe(v);
@@ -765,6 +795,7 @@ function leerForm(form, campos) {
   const v = {};
   for (const c of campos) {
     if (!c.k) continue;
+    if (c.t === "articulos") { if ($(`[data-arts="${c.k}"]`, form)) v[c.k] = $$(`input[data-art="${c.k}"]:checked`, form).map(i => i.value); continue; }
     const el = form.elements[c.k];
     if (!el) continue;
     if (c.t === "bool") { v[c.k] = el.checked; continue; }
@@ -779,7 +810,10 @@ function leerForm(form, campos) {
 }
 function valoresCrudos(form, campos) {
   const v = {};
-  campos.forEach(c => { if (c.k && form.elements[c.k]) v[c.k] = c.t === "bool" ? form.elements[c.k].checked : form.elements[c.k].value; });
+  campos.forEach(c => {
+    if (c.k && c.t === "articulos") v[c.k] = $$(`input[data-art="${c.k}"]:checked`, form).map(i => i.value);
+    else if (c.k && form.elements[c.k]) v[c.k] = c.t === "bool" ? form.elements[c.k].checked : form.elements[c.k].value;
+  });
   return v;
 }
 
@@ -882,6 +916,14 @@ function abrirForm(modKey, registro = null, defaults = {}, alGuardar = null) {
     jpy?.addEventListener("input", () => { if (chkTC.checked) calcular(); });
     mxn.addEventListener("input", e => { if (e.isTrusted) { chkTC.checked = false; info.textContent = ""; } });
   }
+
+  // Selector de ventas (movimientos)
+  $$("[data-arts]", ov).forEach(box => {
+    const q = $("[data-q]", box);
+    q.addEventListener("input", () => { const t = norm(q.value); $$(".artsel-r", box).forEach(r => r.classList.toggle("hidden", !!t && !r.dataset.n.includes(t))); });
+    q.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+    box.addEventListener("change", () => refrescar(box.dataset.arts));
+  });
 
   // "＋ Nueva marca…" dentro del select
   $$("[data-nueva]", ov).forEach(box => {
@@ -1290,6 +1332,7 @@ async function vFicha(main, id) {
         ${venta.cliente ? `<dt>Cliente</dt><dd>${esc(venta.cliente)}${venta.destino ? ` · ${esc(venta.destino)}` : ""}</dd>` : ""}
         ${venta.guia || venta.paqueteria ? `<dt>Envío</dt><dd>${esc([venta.paqueteria, venta.guia].filter(Boolean).join(" "))}</dd>` : ""}
         <dt>Depósito</dt><dd>${venta.fecha_deposito ? `${fmt.date(venta.fecha_deposito)} · ${fmt.money(venta.monto_depositado)}` : '<span class="warn">Pendiente</span>'}</dd>
+        ${textoReparto(repartoMovs().get(a.id)) ? `<dt>Dinero fue a</dt><dd>${textoReparto(repartoMovs().get(a.id))}</dd>` : ""}
       </dl><div class="total"><span>Utilidad</span><span class="num ${signo(a.utilidad)}">${fmt.money(a.utilidad)} · ${fmt.pct(a.margen)}</span></div>`
       : `<div class="mute">Aún sin vender.</div>
          ${a.precio_objetivo ? `<dl class="kv" style="margin-top:8px"><dt>Precio objetivo</dt><dd>${fmt.money(a.precio_objetivo)}</dd></dl>` : ""}
@@ -1486,6 +1529,7 @@ function valHist(k, v) {
   if (v === null || v === undefined || v === "") return "vacío";
   if (k === "estatus") return estatusDe(v).nombre;
   if (k === "marca_id") return marcaDe(v) || v;
+  if (k === "articulos" && Array.isArray(v)) return v.length ? v.map(id => artDe(id)?.nombre || id).join(", ") : "ninguna";
   if (/_mxn$|^precio_venta$|^precio_objetivo$|^monto/.test(k)) return fmt.money(v);
   if (/_jpy$/.test(k)) return fmt.jpy(v);
   if (typeof v === "boolean") return v ? "Sí" : "No";
@@ -1633,12 +1677,54 @@ function calcularBalance(hastaMes, esUltimo) {
   const totRec = t(recup), totDest = sum(Object.keys(dest), k => dest[k]);
   return { grupos: grupos.filter(g => pagado[g]), pagado, costoVend, costoInv, gan, recup, nArt, nVend, dest, sinFecha,
     totPag: t(pagado), totCostoVend: t(costoVend), totInv: t(costoInv), totGan: t(gan), totRec, totDest,
-    disponible: Math.max(0, totRec - totDest), exceso: Math.max(0, totDest - totRec) };
+    disponible: Math.max(0, totRec - totDest), exceso: Math.max(0, totDest - totRec), ok };
 }
+
+/* Reparto automático de movimientos amarrados a artículos:
+   el monto se divide entre las piezas en proporción a lo que dejó cada venta (ingreso neto). */
+function repartoMovs(ok = () => true) {
+  const res = new Map();
+  S.movs.forEach(m => {
+    const ids = (m.articulos || []).filter(id => artDe(id));
+    if (!ids.length || !ok(m.fecha)) return;
+    const pesos = ids.map(id => Math.max(0, Number(artDe(id).ingreso_neto) || 0)), tot = sum(pesos, x => x);
+    ids.forEach((id, i) => {
+      const parte = Number(m.monto_mxn) * (tot ? pesos[i] / tot : 1 / ids.length);
+      const o = res.get(id) || {}; o[m.destino] = (o[m.destino] || 0) + parte; res.set(id, o);
+    });
+  });
+  return res;
+}
+// Para una pieza: las tarjetas se cubren primero con su costo; ahorro/otros primero con su ganancia
+function asignarPieza(costo, gan, dests) {
+  let pc = costo, pg = gan;
+  const out = dests.map(([d, x]) => {
+    const tarjeta = /^pago tarjeta/i.test(d); let r = x, c = 0, g = 0;
+    const tC = () => { const y = Math.min(r, pc); c += y; pc -= y; r -= y; }, tG = () => { const y = Math.min(r, pg); g += y; pg -= y; r -= y; };
+    if (tarjeta) { tC(); tG(); } else { tG(); tC(); }
+    if (r > 0.5) { if (tarjeta) c += r; else g += r; }
+    return { d, c, g };
+  });
+  return { out, restoC: pc, restoG: pg };
+}
+const textoReparto = rep => Object.keys(rep || {}).length ? destinosLista().filter(d => rep[d] > 0.5).map(d => `${esc(d)} ${fmt.money0(rep[d])}`).join(" · ") : "";
 
 /* Modelo global: Pagado (CG/Chava) → Resultado (inventario · costo recuperado · ganancia) → Destino (movimientos)
    Las tarjetas se pagan primero con el costo recuperado; ahorro y otros salen primero de la ganancia. */
-function modeloGlobal(B) {
+function modeloGlobal(B, sel = null) {
+  // Parte del artículo seleccionado ("en el total")
+  let it = null, hlInfo = "";
+  if (sel) {
+    const vend = !!(sel.venta_id && B.ok(sel.fecha_venta)), incl = B.ok(sel.fecha_compra) || vend;
+    const g = pagadores().includes((sel.pagado_por || "").toUpperCase()) ? (sel.pagado_por || "").toUpperCase() : "";
+    const quien = nombreP(g), costo = Number(sel.costo_total) || 0;
+    if (incl) {
+      it = { g, costo, vend, gan: vend ? Math.max(0, Number(sel.utilidad) || 0) : 0 };
+      hlInfo = vend
+        ? `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(costo)}; al venderse regresaron ${fmt.money(costo)} a "Costo recuperado" y dejó ${fmt.money(it.gan)} de ganancia. Para seguirlo hasta tarjeta o ahorro hay que amarrarlo a un movimiento.`
+        : `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(costo)} y sigue en inventario (sin vender).`;
+    } else hlInfo = `<b>${esc(sel.nombre)}</b> todavía no se compraba en este mes. Avanza la línea de tiempo.`;
+  }
   const P = B.grupos.map(g => ({ id: "p:" + g, label: nombreP(g), color: g ? colorPersona(g) : VIZ_GRIS, value: B.pagado[g],
     info: `<b>${esc(nombreP(g))}</b> ha pagado <b>${fmt.money(B.pagado[g])}</b> en ${B.nArt[g]} artículos (costo + envío + impuestos) · ${B.nVend[g]} ya vendidos.` }));
   const ganTot = Math.max(0, B.totGan);
@@ -1647,20 +1733,26 @@ function modeloGlobal(B) {
   const nGan = { id: "m:gan", label: "Ganancia", color: C_GAN, value: ganTot, info: `<b>${fmt.money(B.totGan)}</b> de ganancia limpia en ${sum(B.grupos, g => B.nVend[g])} ventas (ya sin comisiones ni envíos).` };
   const M = [nInv, nCos, nGan].filter(n => n.value > 0.5);
   const links = [];
+  // el pedazo del artículo seleccionado va primero (arriba) en cada banda para poder resaltarlo
+  const par = (s, t, total, parte, fan) => {
+    if (parte > 0.5) links.push({ s, t, v0: fan ? 0 : parte, v1: parte, hl: true });
+    const resto = total - (parte || 0);
+    if (resto > 0.5) links.push({ s, t, v0: fan ? 0 : resto, v1: resto });
+  };
   B.grupos.forEach(g => {
-    const p = P.find(x => x.id === "p:" + g);
-    if (B.costoInv[g] > 0.5) links.push({ s: p, t: nInv, v0: B.costoInv[g], v1: B.costoInv[g] });
-    if (B.costoVend[g] > 0.5) links.push({ s: p, t: nCos, v0: B.costoVend[g], v1: B.costoVend[g] });
-    if (B.gan[g] > 0.5 && ganTot > 0) links.push({ s: p, t: nGan, v0: 0, v1: B.gan[g] });
+    const p = P.find(x => x.id === "p:" + g), mio = it && it.g === g;
+    par(p, nInv, B.costoInv[g], mio && !it.vend ? it.costo : 0, false);
+    par(p, nCos, B.costoVend[g], mio && it.vend ? it.costo : 0, false);
+    if (ganTot > 0) par(p, nGan, Math.max(0, B.gan[g]), mio && it.vend ? it.gan : 0, true);
   });
   // reparto de lo recuperado hacia los destinos
   let poolC = B.totCostoVend, poolG = ganTot;
-  const D = [];
+  const D = [], dl = [];
   const toma = (n, a, primero) => {
     const orden = primero === "c" ? [["c", nCos], ["g", nGan]] : [["g", nGan], ["c", nCos]];
     let r = a;
-    orden.forEach(([k, src]) => { const disp = k === "c" ? poolC : poolG; const x = Math.min(r, disp); if (x > 0.5) { links.push({ s: src, t: n, v0: x, v1: x }); r -= x; if (k === "c") poolC -= x; else poolG -= x; } });
-    if (r > 0.5) links.push({ s: primero === "c" ? nCos : nGan, t: n, v0: 0, v1: r });
+    orden.forEach(([k, src]) => { const disp = k === "c" ? poolC : poolG; const x = Math.min(r, disp); if (x > 0.5) { dl.push({ s: src, t: n, x }); r -= x; if (k === "c") poolC -= x; else poolG -= x; } });
+    if (r > 0.5) dl.push({ s: primero === "c" ? nCos : nGan, t: n, x: r, fan: true });
   };
   destinosLista().filter(d => B.dest[d] > 0).forEach(d => {
     const tarjeta = /^pago tarjeta/i.test(d);
@@ -1670,23 +1762,43 @@ function modeloGlobal(B) {
   if (poolC + poolG > 0.5) {
     const n = { id: "d:disp", label: "Disponible", color: VIZ_GRIS, value: poolC + poolG, info: `<b>${fmt.money(poolC + poolG)}</b> recuperados que aún no se asignan${poolG > 0.5 ? ` (${fmt.money(poolG)} son ganancia)` : ""}.` };
     D.push(n);
-    if (poolC > 0.5) links.push({ s: nCos, t: n, v0: poolC, v1: poolC });
-    if (poolG > 0.5) links.push({ s: nGan, t: n, v0: poolG, v1: poolG });
+    if (poolC > 0.5) dl.push({ s: nCos, t: n, x: poolC });
+    if (poolG > 0.5) dl.push({ s: nGan, t: n, x: poolG });
   }
-  return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links };
+  // parte de la pieza seleccionada hacia los destinos (según los movimientos amarrados a ella)
+  const parteItem = {};
+  if (it && it.vend) {
+    const rp = repartoMovs(B.ok).get(sel.id) || {};
+    const A = asignarPieza(it.costo, it.gan, destinosLista().filter(d => rp[d] > 0.5).map(d => [d, rp[d]]));
+    A.out.forEach(o => { if (o.c > 0.5) parteItem[`m:cos|d:${o.d}`] = o.c; if (o.g > 0.5) parteItem[`m:gan|d:${o.d}`] = o.g; });
+    if (A.restoC > 0.5) parteItem["m:cos|d:disp"] = A.restoC;
+    if (A.restoG > 0.5) parteItem["m:gan|d:disp"] = A.restoG;
+    const quien = nombreP(it.g), txt = textoReparto(rp), resto = A.restoC + A.restoG;
+    hlInfo = `<b>${esc(sel.nombre)}</b>: ${esc(quien)} pagó ${fmt.money(it.costo)} y dejó ${fmt.money(it.gan)} de ganancia. `
+      + (txt ? `Su dinero fue a: ${txt}${resto > 0.5 ? ` · ${fmt.money0(resto)} sigue disponible` : ""}.` : `Aún no está amarrada a ningún movimiento: todo su dinero cuenta como disponible.`);
+  }
+  dl.forEach(l => {
+    const hp = Math.min(parteItem[`${l.s.id}|${l.t.id}`] || 0, l.x), r = l.x - hp;
+    if (hp > 0.5) links.push({ s: l.s, t: l.t, v0: l.fan ? 0 : hp, v1: hp, hl: true });
+    if (r > 0.5) links.push({ s: l.s, t: l.t, v0: l.fan ? 0 : r, v1: r });
+  });
+  return { headers: ["Pagado", "Resultado", "Destino"], cols: [P, M, D], links, hl: !!sel, hlInfo };
 }
 
 /* Modelo por artículo: Costo → Venta → Reparto */
 function modeloArticulo(a) {
   const pag = (a.pagado_por || "").toUpperCase(), quien = nombreP(pag), cP = pag ? colorPersona(pag) : VIZ_GRIS;
-  const comp = [["Artículo", Number(a.pago_mxn) || 0, cP], ["Envío internacional", Number(a.envio_mxn_efectivo) || 0, C_INV],
+  const comp = [["Artículo", Number(a.pago_mxn) || 0, C_AHO], ["Envío internacional", Number(a.envio_mxn_efectivo) || 0, C_INV],
     ["Impuestos", Number(a.impuestos_mxn) || 0, C_COSTO], ["Otros costos", Number(a.otros_costos_mxn) || 0, C_OTROS]]
     .filter(c => c[1] > 0.5).map(([l, v, c]) => ({ id: "c:" + l, label: l, color: c, value: v, info: `<b>${l}</b>: ${fmt.money(v)}${l === "Artículo" ? ` · pagado por ${esc(quien)}` : ""}.` }));
   const costo = Number(a.costo_total) || 0, links = [];
+  const pagador = { id: "q:" + pag, label: quien, color: cP, value: costo, info: `<b>${esc(quien)}</b> pagó ${fmt.money(costo)} por esta pieza (artículo + envío + impuestos).` };
+  comp.forEach(c => links.push({ s: pagador, t: c, v0: c.value, v1: c.value }));
+  const P0 = costo ? [pagador] : [];
   if (!a.venta_id) {
     const n = { id: "m:inv", label: "Sin vender", color: C_INV, value: costo, info: `Aún sin vender. Usa <b>💲 Cotización</b> en la ficha para simular su precio.` };
     comp.forEach(c => links.push({ s: c, t: n, v0: c.value, v1: c.value }));
-    return { headers: ["Costo", "Estado", ""], cols: [comp, costo ? [n] : [], []], links };
+    return { headers: ["Pagó", "Costo", "Estado"], cols: [P0, comp, costo ? [n] : []], links };
   }
   const precio = Number(a.precio_venta) || 0, com = Number(a.comision_mxn) || 0, env = Number(a.envio_venta_mxn) || 0;
   const neto = precio - com - env, repone = Math.max(0, Math.min(costo, neto)), ganancia = Math.max(0, neto - costo), perdida = Math.max(0, costo - neto);
@@ -1697,7 +1809,20 @@ function modeloArticulo(a) {
     ["Ganancia", ganancia, C_GAN, `<b>${fmt.money(ganancia)}</b> de ganancia · margen ${fmt.pct(a.margen)}.`]]
     .filter(r => r[1] > 0.5).map(([l, v, c, inf]) => ({ id: "r:" + l, label: l, color: c, value: v, info: inf }));
   R.forEach(r => links.push({ s: venta, t: r, v0: r.value, v1: r.value }));
-  return { headers: ["Costo", "Venta", "Reparto"], cols: [comp, precio ? [venta] : [], R], links };
+  const rp = repartoMovs().get(a.id);
+  if (!rp) return { headers: ["Pagó", "Costo", "Venta", "Reparto"], cols: [P0, comp, precio ? [venta] : [], R], links };
+  // Amarrada a movimientos: se sigue hasta su destino final
+  const A = asignarPieza(repone, ganancia, destinosLista().filter(d => rp[d] > 0.5).map(d => [d, rp[d]]));
+  const nRep = R.find(r => r.id.startsWith("r:Repone")), nGan = R.find(r => r.id === "r:Ganancia");
+  const D = A.out.map(o => ({ id: "d:" + o.d, label: o.d, color: colorDestino(o.d), value: o.c + o.g, info: `<b>${fmt.money(o.c + o.g)}</b> de esta venta se fueron a <b>${esc(o.d)}</b> (reparto automático del movimiento).`, o }));
+  D.forEach(n => { if (n.o.c > 0.5 && nRep) links.push({ s: nRep, t: n, v0: n.o.c, v1: n.o.c }); if (n.o.g > 0.5 && nGan) links.push({ s: nGan, t: n, v0: n.o.g, v1: n.o.g }); });
+  if (A.restoC + A.restoG > 0.5) {
+    const n = { id: "d:disp", label: "Sin asignar", color: VIZ_GRIS, value: A.restoC + A.restoG, info: `<b>${fmt.money(A.restoC + A.restoG)}</b> de esta venta todavía no se asignan a ningún movimiento.` };
+    D.push(n);
+    if (A.restoC > 0.5 && nRep) links.push({ s: nRep, t: n, v0: A.restoC, v1: A.restoC });
+    if (A.restoG > 0.5 && nGan) links.push({ s: nGan, t: n, v0: A.restoG, v1: A.restoG });
+  }
+  return { headers: ["Pagó", "Costo", "Venta", "Reparto", "Destino"], cols: [P0, comp, precio ? [venta] : [], R, D], links };
 }
 
 function dibujarSankey(svgCont, mod, info) {
@@ -1707,38 +1832,38 @@ function dibujarSankey(svgCont, mod, info) {
   const maxTot = Math.max(...cols.map(c => sum(c, n => n.value)), 1);
   const disp = H - TOP - 8;
   const k = (disp - GAP * Math.max(...cols.map(c => Math.max(0, c.length - 1)))) / maxTot;
-  const xs = [0, W / 2 - BW / 2, W - BW];
+  const nC = cols.length, xs = cols.map((_, i) => i === 0 ? 0 : i === nC - 1 ? W - BW : i * (W - BW) / (nC - 1));
   cols.forEach((c, ci) => {
     c.forEach(n => { n.h = Math.max(n.value * k, 3); n.slot = Math.max(n.h, MINSLOT); n.ci = ci; });
     const alto = sum(c, n => n.slot) + GAP * Math.max(0, c.length - 1);
     let y = TOP + Math.max(0, (disp - alto) / 2);
     c.forEach(n => { n.y = y + (n.slot - n.h) / 2; n.x = xs[ci]; n.outY = n.y; n.inY = n.y; y += n.slot + GAP; });
   });
-  const defs = [], bands = [];
+  const defs = [], bands = [], hlIds = new Set();
   mod.links.forEach((l, i) => {
+    if (l.hl) { hlIds.add(l.s.id); hlIds.add(l.t.id); }
     const w0 = l.v0 * k, w1 = l.v1 * k;
     if (w0 + w1 < 0.3) return;
     const x0 = l.s.x + BW, x1 = l.t.x, xm = (x0 + x1) / 2;
     const y0 = l.s.outY, y1 = l.t.inY; l.s.outY += w0; l.t.inY += w1;
     defs.push(`<linearGradient id="sg${i}" x1="0" x2="1"><stop offset="0" stop-color="${l.s.color}"/><stop offset="1" stop-color="${l.t.color}"/></linearGradient>`);
-    bands.push(`<path class="band" data-s="${esc(l.s.id)}" data-t="${esc(l.t.id)}" fill="url(#sg${i})" fill-opacity=".38" d="M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + w1} C${xm},${y1 + w1} ${xm},${y0 + w0} ${x0},${y0 + w0} Z"><title>${esc(l.s.label)} → ${esc(l.t.label)}</title></path>`);
+    bands.push(`<path class="band${l.hl ? " hl" : ""}" data-s="${esc(l.s.id)}" data-t="${esc(l.t.id)}" fill="url(#sg${i})" fill-opacity=".38" d="M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + w1} C${xm},${y1 + w1} ${xm},${y0 + w0} ${x0},${y0 + w0} Z"><title>${esc(l.s.label)} → ${esc(l.t.label)}</title></path>`);
   });
   const nodo = n => {
     const cx = n.ci === 0 ? n.x + BW + 8 : n.x - 8, anc = n.ci === 0 ? "start" : "end", my = n.y + n.h / 2;
-    return `<g class="node" data-id="${esc(n.id)}" style="cursor:pointer"><rect x="${n.x}" y="${n.y}" width="${BW}" height="${n.h}" rx="3" fill="${n.color}"/>
+    return `<g class="node${hlIds.has(n.id) ? " hlN" : ""}" data-id="${esc(n.id)}" style="cursor:pointer"><rect x="${n.x}" y="${n.y}" width="${BW}" height="${n.h}" rx="3" fill="${n.color}"/>
       <rect x="${n.x - 6}" y="${n.y - 6}" width="${BW + 12}" height="${n.h + 12}" fill="transparent"/>
       <text class="lbl" x="${cx}" y="${my - 3}" text-anchor="${anc}">${esc(n.label)}</text>
       <text class="amt" x="${cx}" y="${my + 13}" text-anchor="${anc}">${fmt.money0(n.value)}</text></g>`;
   };
-  const [h0, h1, h2] = mod.headers;
-  svgCont.innerHTML = `<svg class="sankey" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero">
-    <defs>${defs.join("")}</defs>
-    <text class="hdr" x="0" y="12">${esc(h0)}</text><text class="hdr" x="${W / 2}" y="12" text-anchor="middle">${esc(h1)}</text><text class="hdr" x="${W}" y="12" text-anchor="end">${esc(h2)}</text>
+  const hdrs = mod.headers.map((h, i) => `<text class="hdr" x="${i === 0 ? 0 : i === nC - 1 ? W : xs[i] + BW / 2}" y="12" text-anchor="${i === 0 ? "start" : i === nC - 1 ? "end" : "middle"}">${esc(h || "")}</text>`).join("");
+  svgCont.innerHTML = `<svg class="sankey${mod.hl ? " foco-item" : ""}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Flujo del dinero">
+    <defs>${defs.join("")}</defs>${hdrs}
     ${bands.join("")}${cols.flat().map(nodo).join("")}</svg>`;
   const svg = $("svg", svgCont), todos = cols.flat();
   const foco = id => {
     $$(".on", svg).forEach(e => e.classList.remove("on"));
-    if (!id) { svg.classList.remove("foco"); info.innerHTML = "Toca una barra para ver su detalle."; return; }
+    if (!id) { svg.classList.remove("foco"); info.innerHTML = mod.hlInfo || "Toca una barra para ver su detalle."; return; }
     svg.classList.add("foco");
     $$(".band", svg).forEach(b => { if (b.dataset.s === id || b.dataset.t === id) { b.classList.add("on"); $(`.node[data-id="${CSS.escape(b.dataset.s === id ? b.dataset.t : b.dataset.s)}"]`, svg)?.classList.add("on"); } });
     $(`.node[data-id="${CSS.escape(id)}"]`, svg)?.classList.add("on");
@@ -1756,7 +1881,7 @@ function dibujarSankey(svgCont, mod, info) {
 
 function vBalance(main) {
   const meses = mesesBalance();
-  const st = (vBalance.st ||= { art: null, q: "" });
+  const st = (vBalance.st ||= { art: null, q: "", modo: "detalle" });
   if (st.idx == null || st.idx >= meses.length) st.idx = meses.length - 1;
   if (st.art && !artDe(st.art)) st.art = null;
   clearInterval(vBalance.play); vBalance.play = null;
@@ -1789,14 +1914,24 @@ function vBalance(main) {
   const kpi = (l, v, sub, cls = "") => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls}">${v}</div><div class="s">${sub}</div></div>`;
   const pinta = () => {
     const a = st.art && artDe(st.art);
-    $("#tBar").classList.toggle("hidden", !!a); $("#tNota").classList.toggle("hidden", !!a);
+    const detalle = a && st.modo === "detalle";
+    $("#tBar").classList.toggle("hidden", !!detalle); $("#tNota").classList.toggle("hidden", !!detalle);
     $("#bArt").classList.toggle("hidden", !a);
     if (a) {
-      $("#bSub").textContent = "El viaje del dinero de una pieza: lo que costó, en cuánto se vendió y cómo se repartió";
+      $("#bSub").textContent = detalle ? "El viaje del dinero de una pieza: quién pagó, lo que costó, en cuánto se vendió y cómo se repartió" : "Dónde está esta pieza dentro del flujo total";
       $("#bArt").innerHTML = `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><span class="soft" style="font-size:12px">${esc(a.marca || "")}</span> <b>${esc(a.nombre)}</b> ${pillEst(a.estatus)}</div>
-        <div style="display:flex;gap:8px"><a class="btn sm" href="#/a/${esc(a.id)}">Abrir ficha</a><button class="btn sm" id="bTodos">✕ Ver todo</button></div></div>`;
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg"><button data-modo="total" class="${!detalle ? "on" : ""}">◎ En el total</button><button data-modo="detalle" class="${detalle ? "on" : ""}">☰ Detalle</button></div>
+        <a class="btn sm" href="#/a/${esc(a.id)}">Abrir ficha</a><button class="btn sm" id="bTodos">✕ Ver todo</button></div></div>`;
       $("#bTodos").onclick = () => { st.art = null; pinta(); };
-      const mod = modeloArticulo(a);
+      $$("[data-modo]", $("#bArt")).forEach(b => b.onclick = () => { st.modo = b.dataset.modo; pinta(); });
+      let mod;
+      if (detalle) mod = modeloArticulo(a);
+      else {
+        const ultimo = st.idx === meses.length - 1, B = calcularBalance(meses[st.idx], ultimo);
+        $("#tMes").textContent = nombreMes(meses[st.idx]); $("#tRange").value = st.idx;
+        $("#tPrev").disabled = st.idx === 0; $("#tNext").disabled = ultimo;
+        mod = modeloGlobal(B, a);
+      }
       dibujarSankey($("#sk"), mod, $("#si")); leyenda(mod.cols);
       const com = (Number(a.comision_mxn) || 0) + (Number(a.envio_venta_mxn) || 0);
       $("#bk").innerHTML = kpi("Costo total", fmt.money0(a.costo_total), `Pagado por ${esc(nombreP((a.pagado_por || "").toUpperCase()))}`)
@@ -1860,7 +1995,7 @@ function vMovimientos(main) {
     <div id="l"></div>`;
   const cols = [
     { k: "fecha", l: "Fecha", f: fmt.date },
-    { k: "destino", l: "Destino", h: r => `<span class="dot-c" style="background:${colorDestino(r.destino)}"></span>${esc(r.destino)}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>` },
+    { k: "destino", l: "Destino", h: r => `<span class="dot-c" style="background:${colorDestino(r.destino)}"></span>${esc(r.destino)}<div class="mute" style="font-size:11.5px">${esc(r.descripcion || "")}</div>${(r.articulos || []).length ? `<div style="font-size:11.5px;color:var(--accent)">🔗 ${esc(r.articulos.map(id => artDe(id)?.nombre || id).join(", "))}</div>` : ""}` },
     { k: "creado_por", l: "Registró", hm: 1, h: r => esc((r.creado_por || "").split("@")[0]) },
     { k: "monto_mxn", l: "Monto", r: 1, f: fmt.money },
   ];
